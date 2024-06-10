@@ -1,0 +1,21 @@
+[package]
+name = "wise"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rcon = { version = "0.1.0", path = "../rcon" }
+bytes = "1.6.0"
+thiserror = "1.0.61"
+tokio = { version = "1.38.0", features = ["full"] }
+lazy_static = "1.4.0"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+clap = { version = "4.5.7", features = ["derive"] }
+clap_derive = "4.5.5"
+config = "0.14.0"
+serde_derive = "1.0.203"
+serde = "1.0.203"
+serde_with = "3.8.1"

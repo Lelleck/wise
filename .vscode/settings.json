@@ -1,0 +1,15 @@
+{
+  "[rust]": {
+    "editor.formatOnSave": true
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "enabled": true
+  },
+  "rust-analyzer.linkedProjects": [
+    ".\\Cargo.toml"
+  ],
+  "rust-analyzer.showUnlinkedFileNotification": false,
+  "vim.useSystemClipboard": true,
+  "vim.useCtrlKeys": true,
+}
+  
