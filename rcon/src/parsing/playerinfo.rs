@@ -7,8 +7,9 @@ use nom::{
     sequence::tuple,
     IResult,
 };
+use serde::Serialize;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct PlayerInfo {
     pub name: String,
     pub id: PlayerId,

@@ -1,10 +1,11 @@
 use nom::combinator::map;
 use nom::{branch::alt, IResult};
+use serde::Serialize;
 use uuid::Uuid;
 
 use super::utils::{take_u64, take_uuid};
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct Player {
     pub name: String,
     pub id: PlayerId,
@@ -16,7 +17,7 @@ impl Player {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum PlayerId {
     Steam(u64),
     Windows(Uuid),

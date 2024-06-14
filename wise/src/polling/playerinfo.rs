@@ -1,17 +1,20 @@
 use std::fmt::Debug;
 
+use crate::event::ServerEvent;
+
 use super::utils::fetch;
 use rcon::{
     connection::RconConnection,
     parsing::{playerinfo::PlayerInfo, Player},
 };
+use serde::Serialize;
 use tokio::time::sleep;
 use tracing::{debug, error, instrument, warn};
 
 use super::PollingContext;
 
 // TODO: maybe we can make this generic?
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 pub enum PlayerChanges {
     Unit {
         old_unit: Option<u64>,
@@ -70,11 +73,11 @@ pub enum PlayerChanges {
 }
 
 /// Consistently polls the current state of a player and records the changes.
-#[instrument(level = "debug", skip_all, fields(player = ?player, poll_id = ctx.id))]
-pub async fn poll_playerinfo(player: Player, ctx: PollingContext) {
+#[instrument(level = "debug", skip_all, fields(player = ?player, poller_id = ctx.id))]
+pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
     debug!("Starting player poller");
     let PollingContext { config, rx, .. } = ctx;
-    let player_name = player.name;
+    let player_name = player.name.clone();
 
     let connection = RconConnection::new(&config.credentials).await;
     if let Err(e) = connection {
@@ -120,6 +123,11 @@ pub async fn poll_playerinfo(player: Player, ctx: PollingContext) {
 
         if previous.is_none() {
             debug!("Started tracking with: {:?}", current);
+            ctx.broadcast.send(ServerEvent::Player {
+                player: player.clone(),
+                changes: vec![],
+                new_state: current.clone(),
+            });
             previous = Some(current);
             continue;
         }
@@ -137,6 +145,11 @@ pub async fn poll_playerinfo(player: Player, ctx: PollingContext) {
             connection.id(),
             changes
         );
+        ctx.broadcast.send(ServerEvent::Player {
+            player: player.clone(),
+            changes,
+            new_state: current.clone(),
+        });
         previous = Some(current);
     }
     debug!("Received cancellation request... Stopping polling");

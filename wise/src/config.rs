@@ -29,11 +29,27 @@ pub struct PollingConfig {
     pub cooldown_ms: Duration,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ExportingConfig {
+    pub websocket: WebsocketConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebsocketConfig {
+    pub enabled: bool,
+
+    // TODO: parse to address
+    pub address: String,
+
+    pub access_token: String,
+}
+
 /// Overall configuration of the application.
 #[derive(Debug, Deserialize)]
 pub struct FileConfig {
     pub credentials: RconCredentials,
     pub polling: PollingConfig,
+    pub exporting: ExportingConfig,
 }
 
 impl FileConfig {

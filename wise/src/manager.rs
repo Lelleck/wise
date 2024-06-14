@@ -13,6 +13,7 @@ use tracing::{debug, warn};
 
 use crate::{
     config::FileConfig,
+    exporting::queue::EventSender,
     polling::{playerinfo::poll_playerinfo, showlog::poll_showlog, PollingContext},
 };
 
@@ -22,17 +23,19 @@ pub struct Manager {
     task_map: HashMap<u64, TaskEntry>,
     player_map: HashMap<Player, u64>,
     config: Arc<FileConfig>,
+    sender: EventSender,
 }
 
 struct TaskEntry(#[allow(dead_code)] JoinHandle<()>, Sender<()>);
 
 impl Manager {
-    pub fn new(config: Arc<FileConfig>) -> Self {
+    pub fn new(config: Arc<FileConfig>, sender: EventSender) -> Self {
         Self {
             running_id: 0,
             task_map: HashMap::new(),
             player_map: HashMap::new(),
             config,
+            sender,
         }
     }
 
@@ -96,7 +99,10 @@ impl Manager {
     fn create_ctx(&mut self) -> (PollingContext, Sender<()>) {
         let id = self.get_id();
         let (tx, rx) = watch::channel(());
-        (PollingContext::new(self.config.clone(), rx, id), tx)
+        (
+            PollingContext::new(self.config.clone(), rx, id, self.sender.clone()),
+            tx,
+        )
     }
 
     /// Get a new unique id.

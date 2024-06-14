@@ -5,3 +5,10 @@ password = "" # The password used to login
 [polling]
 wait_ms = 1000 # Milliseconds to wait between pollings
 colldown_ms = 1000 # Milliseconds before opening another connection to the server
+
+[exporting]
+    
+[exporting.websocket]
+enabled = false
+address = ""
+access_token = ""
