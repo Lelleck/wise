@@ -94,13 +94,13 @@ fn handle_untracked_log(log_line: &LogLine, manager: &mut MutexGuard<Manager>) {
                 killer, killer_faction, kill_type, victim, victim_faction, weapon
             );
         }
-        LogKind::GameStart { map } => debug!("Detected game start on {}", map),
-        LogKind::GameEnd {
+        LogKind::MatchStart { map } => debug!("Detected match start on {}", map),
+        LogKind::MatchEnd {
             map,
             allied_score,
             axis_score,
         } => debug!(
-            "Detected game end on {} with scores Allies: {} - Axis: {}",
+            "Detected match end on {} with scores Allies: {} - Axis: {}",
             map, allied_score, axis_score
         ),
         _ => {}

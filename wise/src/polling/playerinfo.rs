@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::event::ServerEvent;
+use crate::event::RconEvent;
 
 use super::utils::fetch;
 use rcon::{
@@ -17,59 +17,53 @@ use super::PollingContext;
 #[derive(Debug, Clone, Serialize)]
 pub enum PlayerChanges {
     Unit {
-        old_unit: Option<u64>,
-        new_unit: Option<u64>,
+        old: Option<u64>,
+        new: Option<u64>,
     },
 
     Team {
-        old_team: String,
-        new_team: String,
+        old: String,
+        new: String,
     },
 
     Role {
-        old_role: String,
-        new_role: String,
+        old: String,
+        new: String,
     },
 
     Loadout {
-        old_loadout: Option<String>,
-        new_loadout: Option<String>,
+        old: Option<String>,
+        new: Option<String>,
     },
 
     Kills {
-        old_kills: u64,
-        new_kills: u64,
+        old: u64,
+        new: u64,
     },
 
     Deaths {
-        old_deaths: u64,
-        new_deaths: u64,
+        old: u64,
+        new: u64,
     },
 
-    Combat {
-        old_score: u64,
-        new_score: u64,
-    },
-
-    Offense {
-        old_score: u64,
-        new_score: u64,
-    },
-
-    Defense {
-        old_score: u64,
-        new_score: u64,
-    },
-
-    Support {
-        old_score: u64,
-        new_score: u64,
+    Score {
+        kind: ScoreKind,
+        old: u64,
+        new: u64,
     },
 
     Level {
-        old_level: u64,
-        new_level: u64,
+        old: u64,
+        new: u64,
     },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum ScoreKind {
+    Combat,
+    Offense,
+    Defense,
+    Support,
 }
 
 /// Consistently polls the current state of a player and records the changes.
@@ -122,8 +116,8 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
         recoverable_count = 0;
 
         if previous.is_none() {
-            debug!("Started tracking with: {:?}", current);
-            ctx.broadcast.send(ServerEvent::Player {
+            debug!("Started polling with: {:?}", current);
+            ctx.broadcast.send_rcon(RconEvent::Player {
                 player: player.clone(),
                 changes: vec![],
                 new_state: current.clone(),
@@ -145,7 +139,7 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
             connection.id(),
             changes
         );
-        ctx.broadcast.send(ServerEvent::Player {
+        ctx.broadcast.send_rcon(RconEvent::Player {
             player: player.clone(),
             changes,
             new_state: current.clone(),
@@ -166,21 +160,30 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &mut change_list,
         &old.unit,
         &new.unit,
-        |old_unit, new_unit| PlayerChanges::Unit { old_unit, new_unit },
+        |old_unit, new_unit| PlayerChanges::Unit {
+            old: old_unit,
+            new: new_unit,
+        },
     );
 
     detect(
         &mut change_list,
         &old.team,
         &new.team,
-        |old_team, new_team| PlayerChanges::Team { old_team, new_team },
+        |old_team, new_team| PlayerChanges::Team {
+            old: old_team,
+            new: new_team,
+        },
     );
 
     detect(
         &mut change_list,
         &old.role,
         &new.role,
-        |old_role, new_role| PlayerChanges::Role { old_role, new_role },
+        |old_role, new_role| PlayerChanges::Role {
+            old: old_role,
+            new: new_role,
+        },
     );
 
     detect(
@@ -188,8 +191,8 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &old.loadout,
         &new.loadout,
         |old_loadout, new_loadout| PlayerChanges::Loadout {
-            old_loadout,
-            new_loadout,
+            old: old_loadout,
+            new: new_loadout,
         },
     );
 
@@ -198,8 +201,8 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &old.kills,
         &new.kills,
         |old_kills, new_kills| PlayerChanges::Kills {
-            old_kills,
-            new_kills,
+            old: old_kills,
+            new: new_kills,
         },
     );
 
@@ -208,8 +211,8 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &old.deaths,
         &new.deaths,
         |old_deaths, new_deaths| PlayerChanges::Deaths {
-            old_deaths,
-            new_deaths,
+            old: old_deaths,
+            new: new_deaths,
         },
     );
 
@@ -217,9 +220,10 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &mut change_list,
         &old.combat_score,
         &new.combat_score,
-        |old_score, new_score| PlayerChanges::Combat {
-            old_score,
-            new_score,
+        |old_score, new_score| PlayerChanges::Score {
+            kind: ScoreKind::Combat,
+            old: old_score,
+            new: new_score,
         },
     );
 
@@ -227,9 +231,10 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &mut change_list,
         &old.offense_score,
         &new.offense_score,
-        |old_score, new_score| PlayerChanges::Offense {
-            old_score,
-            new_score,
+        |old_score, new_score| PlayerChanges::Score {
+            kind: ScoreKind::Offense,
+            old: old_score,
+            new: new_score,
         },
     );
 
@@ -237,9 +242,10 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &mut change_list,
         &old.defense_score,
         &new.defense_score,
-        |old_score, new_score| PlayerChanges::Defense {
-            old_score,
-            new_score,
+        |old_score, new_score| PlayerChanges::Score {
+            kind: ScoreKind::Defense,
+            old: old_score,
+            new: new_score,
         },
     );
 
@@ -247,9 +253,10 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &mut change_list,
         &old.support_score,
         &new.support_score,
-        |old_score, new_score| PlayerChanges::Support {
-            old_score,
-            new_score,
+        |old_score, new_score| PlayerChanges::Score {
+            kind: ScoreKind::Support,
+            old: old_score,
+            new: new_score,
         },
     );
 
@@ -258,8 +265,8 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChange
         &old.level,
         &new.level,
         |old_level, new_level| PlayerChanges::Level {
-            old_level,
-            new_level,
+            old: old_level,
+            new: new_level,
         },
     );
 

@@ -13,6 +13,7 @@ use serde::Serialize;
 pub struct PlayerInfo {
     pub name: String,
     pub id: PlayerId,
+    // TODO: represent the "None" team as None to preserve consistency?
     pub team: String,
     pub role: String,
     pub unit: Option<u64>,

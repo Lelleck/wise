@@ -1,14 +1,14 @@
 use tokio::sync::{broadcast::Receiver, broadcast::Sender};
 
-use crate::event::ServerEvent;
+use crate::event::{RconEvent, WiseEvent};
 
 #[derive(Debug, Clone)]
 pub struct EventSender {
-    tx: Sender<ServerEvent>,
+    tx: Sender<WiseEvent>,
 }
 
 impl EventSender {
-    pub fn new(tx: Sender<ServerEvent>) -> Self {
+    pub fn new(tx: Sender<WiseEvent>) -> Self {
         Self { tx }
     }
 
@@ -16,22 +16,22 @@ impl EventSender {
         EventReceiver::new(Sender::subscribe(&self.tx))
     }
 
-    pub fn send(&mut self, event: ServerEvent) {
-        _ = self.tx.send(event);
+    pub fn send_rcon(&mut self, event: RconEvent) {
+        _ = self.tx.send(WiseEvent::Rcon(event));
     }
 }
 
 #[derive(Debug)]
 pub struct EventReceiver {
-    rx: Receiver<ServerEvent>,
+    rx: Receiver<WiseEvent>,
 }
 
 impl EventReceiver {
-    pub fn new(rx: Receiver<ServerEvent>) -> Self {
+    pub fn new(rx: Receiver<WiseEvent>) -> Self {
         Self { rx }
     }
 
-    pub async fn receive(&mut self) -> ServerEvent {
+    pub async fn receive(&mut self) -> WiseEvent {
         // TODO: make this redudant
         self.rx.recv().await.unwrap()
     }

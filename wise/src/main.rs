@@ -23,7 +23,7 @@ use rcon::connection::RconConnection;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_config = CliConfig::parse();
-    fmt().with_max_level(Level::DEBUG).init();
+    fmt().with_max_level(Level::INFO).init();
     info!("Logging & CLI config initialized... Loading file config");
     let file_config = FileConfig::new(cli_config.config_file)?;
     info!("File config intialized... Testing connectivity to server");

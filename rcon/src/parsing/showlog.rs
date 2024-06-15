@@ -41,10 +41,10 @@ pub enum LogKind {
         is_teamkill: bool,
         weapon: String,
     },
-    GameStart {
+    MatchStart {
         map: String,
     },
-    GameEnd {
+    MatchEnd {
         map: String,
         allied_score: u64,
         axis_score: u64,
