@@ -9,6 +9,6 @@ colldown_ms = 1000 # Milliseconds before opening another connection to the serve
 [exporting]
     
 [exporting.websocket]
-enabled = false
-address = ""
-access_token = ""
+enabled = true # Enable or disable the websocket
+address = "localhost:25052" # The address to which the websocket should bind to
+access_token = "" # A unique token used by requesting applications to authenticate themselves (WIP: not currently implemented)

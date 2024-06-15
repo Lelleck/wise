@@ -43,6 +43,4 @@ async fn handle_websocket(stream: TcpStream, mut rx: EventReceiver) -> Result<()
         // TODO: this might be limiting
         write.send(Message::text(value)).await?;
     }
-
-    Ok(())
 }
