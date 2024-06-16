@@ -1,5 +1,5 @@
 import websocket  # Requires the 'websocket-client' library
-from colored import Fore, Back, Style
+from datetime import datetime
 import wise_lib
 
 def on_message(ws, message):
@@ -8,56 +8,57 @@ def on_message(ws, message):
         # Thats not supposed to happen, yet!
         return
     
-    rcon_event = message.Rcon
-    if hasattr(rcon_event, "Player"):
-        # Its a player event
+    rcon = message.Rcon
+    if hasattr(rcon, "Player"):
+        event = rcon.Player
+        player = event.player # Every player event belongs to one player
 
-        # Get the player this event belongs to
-        event_string = ""
-        events = []
+        # The id may be Steam or Windows but in most cases we are only 
+        # interested in the string version of it so we can use this helper
+        player_id = wise_lib.extract_id(player.id) 
+        player_overview = f"{player.name}/{player_id}"
 
-        player_event = rcon_event.Player
-        player = player_event.player
-        player_id = player.id.Steam if hasattr(player.id, "Steam") else player.id.Windows
-        event_string += f"{player.name}/{Fore.red}{player_id}{Style.reset}"
-
-        changes = player_event.changes
-        for change in changes:
-
-            reflection_print(change)
+        changes = []
+        for change in event.changes:
+            # All changes exclusively hold "old" and "new" attributes.
+            # Only the ScoreChange also holds its kind which makes it 
+            # an exception to the rule.
             if hasattr(change, "Score"):
-                score_change = change.Score
-                events.append(format(Fore.green, score_change.kind, score_change.old, score_change.new))
+                change = change.Score
+                changes.append(format(change.kind, change.old, change.new))
                 continue
 
-            events.append(reflection_print(change))
+            # Many times an object may contain a single key and value.
+            # This is the case when attempting to access an enum variant.
+            # The below helper function allows us the name and value of the 
+            # enum variant inside the object.
+            (key, value) = wise_lib.get_enum_variant(change)
+            changes.append(format(key, value.old, value.new))
         
         if not changes:
-            events.append(f"{Fore.magenta}{Style.bold}Start polling{Style.reset}")
+            # If no changes took place Wise has seen this player for the first time
+            changes.append(f"Start polling")
 
-        buffer = " " * (66 - len(event_string))
-        print(f"{event_string}{buffer} | {', '.join(events)}")
+        print_prelude("PLAYER")
+        print(f"{player_overview} | {', '.join(changes)}")
+    
+    if hasattr(rcon, "Log"):
+        # Its a log event
+        print(str(rcon))
+        pass
 
-def reflection_print(change):
-    key = list(change.__dict__.keys())[0]
+def print_prelude(type):
+    current_time = datetime.now().time()
+    print(f"{current_time} {type} ", end="")
 
-    color = Fore.blue
-    if key in ["Kills", "Deaths"]:
-        color = Fore.light_red
-
-    value = list(change.__dict__.values())[0]
-    old = value.old
-    new = value.new
-    return format(color, key, old, new)
-
-def format(color, type, old, new):
-    return f"{Style.bold}{color}{type}{Style.reset} {Fore.grey_0}{old}{Style.reset} → {Style.bold}{new}{Style.reset}"
+def format(type, old, new):
+    return f"{type} {old} → {new}"
 
 def on_error(ws, error):
     print(f"Error: {error}")
 
-def on_close(ws, close_status_code, close_msg):
-    print(f"Connection closed with code: {close_status_code}, message: {close_msg}")
+def on_close(ws, code, msg):
+    print(f"Connection closed with code: {code}, Message: {msg}")
 
 def on_open(ws):
     print("Connection opened")

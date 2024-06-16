@@ -1,23 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Union
-from uuid import UUID
 import json
 from types import SimpleNamespace
-
-@dataclass
-class SteamId:
-    id: int
-
-
-@dataclass
-class WindowsId:
-    """"""
-    id: UUID
-
-
-PlayerId = SteamId | WindowsId
-"""Any type of id used to identify players."""
 
 
 @dataclass
@@ -38,58 +23,58 @@ class ScoreType(Enum):
 @dataclass
 class UnitChange:
     """A player switched units."""
-    old_unit: Optional[int]
-    new_unit: Optional[int]
+    old: Optional[int]
+    new: Optional[int]
 
 
 @dataclass
 class TeamChange:
     """A player switched teams."""
-    old_team: str
-    new_team: str
+    old: str
+    new: str
 
 
 @dataclass
 class RoleChange:
     """A player switched roles."""
-    old_role: str
-    new_role: str
+    old: str
+    new: str
 
 
 @dataclass
 class LoadoutChange:
     """A player equipped another loadout."""
-    old_loadout: Optional[str]
-    new_loadout: Optional[str]
+    old: Optional[str]
+    new: Optional[str]
 
 
 @dataclass
 class KillsChange:
     """A players kill count changed."""
-    old_kills: int
-    new_kills: int
+    old: int
+    new: int
 
 
 @dataclass
 class DeathsChange:
     """A players death count changed."""
-    old_deaths: int
-    new_deaths: int
+    old: int
+    new: int
 
 
 @dataclass
 class LevelChange:
     """A players level changed."""
-    old_level: int
-    new_level: int
+    old: int
+    new: int
 
 
 @dataclass
 class ScoreChange:
     """The score of a player has changed."""
     type: ScoreType
-    old_score: int
-    new_score: int
+    old: int
+    new: int
 
 
 PlayerChange = UnitChange | RoleChange | LoadoutChange | TeamChange | KillsChange | DeathsChange | LevelChange | ScoreChange
@@ -98,7 +83,7 @@ PlayerChange = UnitChange | RoleChange | LoadoutChange | TeamChange | KillsChang
 @dataclass
 class PlayerState:
     name: str
-    id: PlayerId 
+    id: str
     team: str
     role: str
     unit: Optional[int]
@@ -116,7 +101,7 @@ class PlayerState:
 class PlayerEvent:
     """Represents an event related to a player."""
     player: Player
-    changes: PlayerChange
+    changes: list[PlayerChange]
     new_state: PlayerState
 
 
@@ -133,6 +118,41 @@ Parse a JSON emitted by wise. This does not work yet, probably needs custom logi
 
 For now use the above provided classes to orient yourself how the API works.
 """
-def parse_wise_event(obj_str: str):
+def parse_wise_event(obj_str: str) -> WiseEvent:
     # TODO: add parsing logic
-    return json.loads(obj_str, object_hook=lambda d: SimpleNamespace(**d))
+    obj = json.loads(obj_str, object_hook=lambda d: SimpleNamespace(**d))
+    return obj
+    if hasattr(obj, "Rcon"):
+        rcon = obj.Rcon
+
+        if hasattr(rcon, "Player"):
+            event = rcon.Player
+            player = event.player
+            player = Player(player.name, extract_id(player.id))
+
+            changes = []
+            for change in event.changes:
+                changes.append(parse_player_change(change))
+
+            state = PlayerState(**vars(event.new_state))
+            state.id = extract_id(state.id)
+            return PlayerEvent(player, changes, state)
+        
+        elif hasattr(rcon, "Log"):
+            event = rcon.Log
+
+def parse_player_change(obj: SimpleNamespace) -> any:
+    if hasattr(obj, "Score"):
+        return ScoreChange(obj.kind, obj.old, obj.new)
+    
+    (key, value) = get_enum_variant(obj)
+    type = globals()[f"{key}Change"]
+    return type(**vars(value))
+
+def get_enum_variant(obj: SimpleNamespace) -> tuple[str, SimpleNamespace]:
+    key = list(vars(obj).keys())[0]
+    value = list(vars(obj).values())[0]
+    return (key, value)
+
+def extract_id(obj: SimpleNamespace) -> str:
+    return str(obj.Steam) if hasattr(obj, "Steam") else obj.Windows
