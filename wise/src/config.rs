@@ -5,7 +5,7 @@ use std::{path::PathBuf, time::Duration};
 use clap::Parser;
 use config::{Config, ConfigError, File};
 use rcon::connection::RconCredentials;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use serde_with::serde_as;
 
 /// Configuration
@@ -20,7 +20,7 @@ pub struct CliConfig {
 impl CliConfig {}
 
 #[serde_with::serde_as]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct PollingConfig {
     #[serde_as(as = "serde_with::DurationMilliSeconds<u64>")]
     pub wait_ms: Duration,
@@ -29,26 +29,46 @@ pub struct PollingConfig {
     pub cooldown_ms: Duration,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ExportingConfig {
-    pub websocket: WebsocketConfig,
+    pub websocket: WebSocketConfig,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct WebsocketConfig {
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebSocketConfig {
+    /// Enable or disable websocket exporting.
     pub enabled: bool,
 
     // TODO: parse to address
+    /// The address to which the websocket should bind to.
     pub address: String,
 
-    pub access_token: String,
+    /// The password requesting applications must provide.
+    #[serde(default)]
+    pub password: Option<String>,
+
+    /// Enable or disable TLS.
+    pub tls: bool,
+
+    /// Path to the cert file.
+    #[serde(default)]
+    pub cert_file: Option<String>,
+
+    /// Path to the key file.
+    #[serde(default)]
+    pub key_file: Option<String>,
 }
 
 /// Overall configuration of the application.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct FileConfig {
-    pub credentials: RconCredentials,
+    /// Credentials for accessing RCON.
+    pub rcon: RconCredentials,
+
+    /// Configuration for polling the HLL server.
     pub polling: PollingConfig,
+
+    /// Configuration for different modes of exporting.
     pub exporting: ExportingConfig,
 }
 

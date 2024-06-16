@@ -16,7 +16,7 @@ use super::{utils::fetch, PollingContext};
 
 pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, mut ctx: PollingContext) {
     // TODO: use the rx
-    let connection = RconConnection::new(&ctx.config.credentials).await;
+    let connection = RconConnection::new(&ctx.config.rcon).await;
     if let Err(e) = connection {
         warn!("Failed to establish connection: {}", e);
         return;

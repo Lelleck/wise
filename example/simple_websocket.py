@@ -2,6 +2,9 @@ import websocket  # Requires the 'websocket-client' library
 from datetime import datetime
 import wise_lib
 
+ADDRESS = "wss://localhost:25052"
+PASSWORD = None
+
 def on_message(ws, message):
     message = wise_lib.parse_wise_event(message)
     if not hasattr(message, "Rcon"):
@@ -61,13 +64,14 @@ def on_close(ws, code, msg):
     print(f"Connection closed with code: {code}, Message: {msg}")
 
 def on_open(ws):
+    if PASSWORD:
+        ws.send_text(PASSWORD)
+
     print("Connection opened")
 
 if __name__ == "__main__":
-    websocket_url = "ws://localhost:25052"
-
     ws = websocket.WebSocketApp(
-        websocket_url,
+        ADDRESS,
         on_message=on_message,
         on_error=on_error,
         on_close=on_close,

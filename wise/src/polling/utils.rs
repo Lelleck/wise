@@ -14,7 +14,7 @@ pub async fn fetch<T>(
         Ok(value) => Ok(value),
         Err(e) => match e {
             RconError::IoError(_) => {
-                let new_connection = RconConnection::new(&config.credentials).await;
+                let new_connection = RconConnection::new(&config.rcon).await;
                 if new_connection.is_err() {
                     return Err((false, e));
                 }

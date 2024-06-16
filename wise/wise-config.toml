@@ -1,4 +1,4 @@
-[credentials]
+[rcon]
 address = "" # The address and port to connect to
 password = "" # The password used to login
 
@@ -11,4 +11,8 @@ colldown_ms = 1000 # Milliseconds before opening another connection to the serve
 [exporting.websocket]
 enabled = true # Enable or disable the websocket
 address = "localhost:25052" # The address to which the websocket should bind to
-access_token = "" # A unique token used by requesting applications to authenticate themselves (WIP: not currently implemented)
+# password = "" # A unique token used by requesting applications to authenticate themselves
+
+tls = false # Enable or disable TLS
+# cert_file = "" # Path to the certificate, only needs to be set if tls is enabled 
+# key_file = "" # Path to the key file, only needs ot be set if tls is enabled

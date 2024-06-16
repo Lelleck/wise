@@ -9,7 +9,10 @@ use std::{sync::Arc, time::Duration};
 use clap::Parser;
 use config::{CliConfig, FileConfig};
 
-use exporting::{queue::EventSender, websocket::run_websocket_server};
+use exporting::{
+    queue::EventSender,
+    websocket::{self},
+};
 use manager::Manager;
 use tokio::{
     sync::{broadcast, Mutex},
@@ -28,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_config = FileConfig::new(cli_config.config_file)?;
     info!("File config intialized... Testing connectivity to server");
 
-    let connection = RconConnection::new(&file_config.credentials).await;
+    let connection = RconConnection::new(&file_config.rcon).await;
     if let Err(e) = connection {
         error!("The test connection to the server failed: {e}");
         return Err(e.into());
@@ -37,13 +40,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut connection = connection.unwrap();
 
     let tx = EventSender::new(broadcast::Sender::new(1000));
-    let for_ws = tx.clone();
-
     let arc_config = Arc::new(file_config);
-    let for_ws_config = arc_config.clone();
-    tokio::spawn(async move {
+
+    if arc_config.exporting.websocket.enabled {
+        let ws_tx = tx.clone();
+        let ws_task = websocket::build_websocket(ws_tx, arc_config.clone()).await?;
+        _ = tokio::spawn(async move {
+            _ = ws_task.await;
+        });
+    }
+
+    /* tokio::spawn(async move {
         _ = run_websocket_server(for_ws, for_ws_config).await;
-    });
+    });*/
 
     let manager = Manager::new(arc_config, tx);
     let arc_manager = Arc::new(Mutex::new(manager));

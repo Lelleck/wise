@@ -2,6 +2,10 @@ import websocket  # Requires the 'websocket-client' library
 from colored import Fore, Back, Style  # Requires the 'colored' library
 from datetime import datetime
 import wise_lib
+import ssl
+
+ADDRESS = "wss://localhost:25052"
+PASSWORD = None
 
 def on_message(ws, message):
     message = wise_lib.parse_wise_event(message)
@@ -102,18 +106,19 @@ def on_error(ws, error):
 def on_close(ws, close_status_code, close_msg):
     print(f"Connection closed with code: {close_status_code}, message: {close_msg}")
 
-def on_open(ws):
+def on_open(ws: websocket.WebSocket):
+    if PASSWORD:
+        ws.send_text(PASSWORD)
+
     print(f"{Back.magenta}{Style.bold} Connection opened {Style.reset}")
 
 if __name__ == "__main__":
-    websocket_url = "ws://localhost:25052"
-
     ws = websocket.WebSocketApp(
-        websocket_url,
+        ADDRESS,
         on_message=on_message,
         on_error=on_error,
         on_close=on_close,
-        on_open=on_open
+        on_open=on_open,
     )
 
-    ws.run_forever()
+    ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})

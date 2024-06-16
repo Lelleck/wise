@@ -73,7 +73,7 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
     let PollingContext { config, rx, .. } = ctx;
     let player_name = player.name.clone();
 
-    let connection = RconConnection::new(&config.credentials).await;
+    let connection = RconConnection::new(&config.rcon).await;
     if let Err(e) = connection {
         warn!("Failed to establish connection: {}", e);
         return;
