@@ -13,7 +13,7 @@ pub struct PollingContext {
     pub id: u64,
     pub config: Arc<FileConfig>,
     pub rx: Receiver<()>,
-    pub broadcast: EventSender,
+    pub tx: EventSender,
 }
 
 impl PollingContext {
@@ -27,7 +27,7 @@ impl PollingContext {
             config,
             rx,
             id,
-            broadcast: broadcaster,
+            tx: broadcaster,
         };
     }
 }

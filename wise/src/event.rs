@@ -1,4 +1,4 @@
-use rcon::parsing::{playerinfo::PlayerInfo, Player};
+use rcon::parsing::{playerinfo::PlayerInfo, showlog::LogLine, Player};
 use serde::Serialize;
 
 use crate::polling::playerinfo::PlayerChanges;
@@ -15,7 +15,7 @@ pub enum RconEvent {
     },
 
     /// A single new log message. All logs are individual.
-    Log(),
+    Log(LogLine),
 
     /// An event related to the match itself took place.
     Match(),

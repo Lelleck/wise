@@ -10,16 +10,13 @@ use tokio::{
 };
 use tracing::{debug, error, warn};
 
-use crate::manager::Manager;
+use crate::{event::RconEvent, manager::Manager};
 
 use super::{utils::fetch, PollingContext};
 
-pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, ctx: PollingContext) {
+pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, mut ctx: PollingContext) {
     // TODO: use the rx
-    let PollingContext {
-        config, rx: _rx, ..
-    } = ctx;
-    let connection = RconConnection::new(&config.credentials).await;
+    let connection = RconConnection::new(&ctx.config.credentials).await;
     if let Err(e) = connection {
         warn!("Failed to establish connection: {}", e);
         return;
@@ -31,7 +28,7 @@ pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, ctx: PollingContext) {
         sleep(Duration::from_secs(1)).await;
 
         let fetch_showlog = connection.fetch_showlog(1).await;
-        let new_logs = fetch(&mut connection, fetch_showlog, &config).await;
+        let new_logs = fetch(&mut connection, fetch_showlog, &ctx.config).await;
         if let Err((recoverable, e)) = new_logs {
             if !recoverable {
                 error!("Unrecoverable error: {}", e);
@@ -43,7 +40,7 @@ pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, ctx: PollingContext) {
         let mut guard = manager.lock().await;
         untracked_logs
             .iter()
-            .for_each(|l| handle_untracked_log(l, &mut guard));
+            .for_each(|l| handle_untracked_log(l, &mut guard, &mut ctx));
     }
 }
 
@@ -58,7 +55,12 @@ fn merge_logs(old_logs: &mut Vec<LogLine>, new_logs: Vec<LogLine>) -> Vec<LogLin
     untracked_logs
 }
 
-fn handle_untracked_log(log_line: &LogLine, manager: &mut MutexGuard<Manager>) {
+fn handle_untracked_log(
+    log_line: &LogLine,
+    manager: &mut MutexGuard<Manager>,
+    ctx: &mut PollingContext,
+) {
+    ctx.tx.send_rcon(RconEvent::Log(log_line.clone()));
     match &log_line.kind {
         LogKind::Connect { player, connect } => match connect {
             true => {

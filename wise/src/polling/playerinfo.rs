@@ -106,6 +106,10 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
                 return;
             }
 
+            if matches!(e, rcon::RconError::Failure) {
+                continue;
+            }
+
             warn!(
                 "Encountered recoverable error ({}/{}): {}",
                 recoverable_count, RECOVERABLE_MAX, e
@@ -117,7 +121,7 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
 
         if previous.is_none() {
             debug!("Started polling with: {:?}", current);
-            ctx.broadcast.send_rcon(RconEvent::Player {
+            ctx.tx.send_rcon(RconEvent::Player {
                 player: player.clone(),
                 changes: vec![],
                 new_state: current.clone(),
@@ -139,7 +143,7 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
             connection.id(),
             changes
         );
-        ctx.broadcast.send_rcon(RconEvent::Player {
+        ctx.tx.send_rcon(RconEvent::Player {
             player: player.clone(),
             changes,
             new_state: current.clone(),

@@ -18,7 +18,7 @@ pub async fn run_websocket_server(
         return Ok(());
     }
 
-    info!("Initialize exporting over websockets");
+    info!("Initializing exporting over websockets");
     let listener = TcpListener::bind(&config.exporting.websocket.address).await?;
     while let Ok((stream, _)) = listener.accept().await {
         let rx = tx.receiver();
