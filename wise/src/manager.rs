@@ -14,7 +14,10 @@ use tracing::{debug, warn};
 use crate::{
     config::FileConfig,
     exporting::queue::EventSender,
-    polling::{playerinfo::poll_playerinfo, showlog::poll_showlog, PollingContext},
+    polling::{
+        gamestate::poll_gamestate, playerinfo::poll_playerinfo, showlog::poll_showlog,
+        PollerContext,
+    },
 };
 
 /// Centrally manages all running pollers.
@@ -57,14 +60,22 @@ impl Manager {
             sleep(manager.config.polling.cooldown_ms).await;
         }
 
-        Manager::start_showlog_poller(manager, arc_manager.clone());
+        Manager::start_showlog_poller(&mut manager, arc_manager.clone());
+        Manager::start_gamestate_poller(&mut manager);
         Ok(())
     }
 
-    fn start_showlog_poller(mut manager: MutexGuard<Manager>, arc_manager: Arc<Mutex<Manager>>) {
+    fn start_showlog_poller(manager: &mut MutexGuard<Manager>, arc_manager: Arc<Mutex<Manager>>) {
         let (ctx, tx) = manager.create_ctx();
         let ctx_id = ctx.id;
         let handle = tokio::spawn(async move { poll_showlog(arc_manager, ctx).await });
+        manager.register_poller(ctx_id, tx, handle);
+    }
+
+    fn start_gamestate_poller(manager: &mut MutexGuard<Manager>) {
+        let (ctx, tx) = manager.create_ctx();
+        let ctx_id = ctx.id;
+        let handle = tokio::spawn(async move { poll_gamestate(ctx).await });
         manager.register_poller(ctx_id, tx, handle);
     }
 
@@ -96,11 +107,11 @@ impl Manager {
         self.kill_poller(id);
     }
 
-    fn create_ctx(&mut self) -> (PollingContext, Sender<()>) {
+    fn create_ctx(&mut self) -> (PollerContext, Sender<()>) {
         let id = self.get_id();
         let (tx, rx) = watch::channel(());
         (
-            PollingContext::new(self.config.clone(), rx, id, self.sender.clone()),
+            PollerContext::new(self.config.clone(), rx, id, self.sender.clone()),
             tx,
         )
     }

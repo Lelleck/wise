@@ -1,7 +1,7 @@
-use rcon::parsing::{playerinfo::PlayerInfo, showlog::LogLine, Player};
+use rcon::parsing::{gamestate::GameState, playerinfo::PlayerInfo, showlog::LogLine, Player};
 use serde::Serialize;
 
-use crate::polling::playerinfo::PlayerChanges;
+use crate::polling::{gamestate::GameStateChanges, playerinfo::PlayerChanges};
 
 /// Any type of event that took place on the Hell Let Loose server.
 #[derive(Debug, Clone, Serialize)]
@@ -18,7 +18,10 @@ pub enum RconEvent {
     Log(LogLine),
 
     /// An event related to the match itself took place.
-    Match(),
+    Game {
+        changes: Vec<GameStateChanges>,
+        new_state: GameState,
+    },
 }
 
 /// All possible messages emitted over the websocket. Currently this

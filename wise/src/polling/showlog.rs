@@ -8,13 +8,14 @@ use tokio::{
     sync::{Mutex, MutexGuard},
     time::sleep,
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, error, instrument, warn};
 
 use crate::{event::RconEvent, manager::Manager};
 
-use super::{utils::fetch, PollingContext};
+use super::{utils::fetch, PollerContext};
 
-pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, mut ctx: PollingContext) {
+#[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
+pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, mut ctx: PollerContext) {
     // TODO: use the rx
     let connection = RconConnection::new(&ctx.config.rcon).await;
     if let Err(e) = connection {
@@ -32,7 +33,10 @@ pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, mut ctx: PollingContext)
         if let Err((recoverable, e)) = new_logs {
             if !recoverable {
                 error!("Unrecoverable error: {}", e);
+                return;
             }
+
+            warn!("Recoverable error: {}", e);
             continue;
         }
         let new_logs = new_logs.unwrap();
@@ -48,7 +52,7 @@ pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, mut ctx: PollingContext)
 fn merge_logs(old_logs: &mut Vec<LogLine>, new_logs: Vec<LogLine>) -> Vec<LogLine> {
     let untracked_logs = new_logs
         .iter()
-        .filter(|new_log| !old_logs.contains(&new_log))
+        .filter(|new_log| !old_logs.contains(new_log))
         .map(|l| l.clone())
         .collect::<Vec<LogLine>>();
     *old_logs = new_logs;
@@ -58,7 +62,7 @@ fn merge_logs(old_logs: &mut Vec<LogLine>, new_logs: Vec<LogLine>) -> Vec<LogLin
 fn handle_untracked_log(
     log_line: &LogLine,
     manager: &mut MutexGuard<Manager>,
-    ctx: &mut PollingContext,
+    ctx: &mut PollerContext,
 ) {
     ctx.tx.send_rcon(RconEvent::Log(log_line.clone()));
     match &log_line.kind {
@@ -96,8 +100,8 @@ fn handle_untracked_log(
                 killer, killer_faction, kill_type, victim, victim_faction, weapon
             );
         }
-        LogKind::MatchStart { map } => debug!("Detected match start on {}", map),
-        LogKind::MatchEnd {
+        LogKind::GameStart { map } => debug!("Detected match start on {}", map),
+        LogKind::GameEnd {
             map,
             allied_score,
             axis_score,

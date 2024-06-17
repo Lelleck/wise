@@ -1,8 +1,9 @@
-use std::num::ParseIntError;
+use std::{num::ParseIntError, time::Duration};
 
 use nom::{
+    bytes::complete::tag,
     character::complete::{char, digit1, hex_digit1},
-    combinator::map_res,
+    combinator::{map, map_res},
     sequence::tuple,
     IResult,
 };
@@ -38,6 +39,15 @@ pub fn take_uuid(input: &str) -> IResult<&str, Uuid> {
                 "{}-{}-{}-{}-{}",
                 part1, part2, part3, part4, part5
             ))
+        },
+    )(input)
+}
+
+pub fn take_duration(input: &str) -> IResult<&str, Duration> {
+    map(
+        tuple((take_u64, tag(":"), take_u64, tag(":"), take_u64)),
+        |(hours, _, minutes, _, seconds)| {
+            Duration::from_secs(hours * 3600 + minutes * 60 + seconds)
         },
     )(input)
 }

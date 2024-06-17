@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::event::RconEvent;
 
-use super::utils::fetch;
+use super::utils::{detect, fetch};
 use rcon::{
     connection::RconConnection,
     parsing::{playerinfo::PlayerInfo, Player},
@@ -11,7 +11,7 @@ use serde::Serialize;
 use tokio::time::sleep;
 use tracing::{debug, error, instrument, warn};
 
-use super::PollingContext;
+use super::PollerContext;
 
 // TODO: maybe we can make this generic?
 #[derive(Debug, Clone, Serialize)]
@@ -68,9 +68,9 @@ pub enum ScoreKind {
 
 /// Consistently polls the current state of a player and records the changes.
 #[instrument(level = "debug", skip_all, fields(player = ?player, poller_id = ctx.id))]
-pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
+pub async fn poll_playerinfo(player: Player, mut ctx: PollerContext) {
     debug!("Starting player poller");
-    let PollingContext { config, rx, .. } = ctx;
+    let PollerContext { config, rx, .. } = ctx;
     let player_name = player.name.clone();
 
     let connection = RconConnection::new(&config.rcon).await;
@@ -133,16 +133,12 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
 
         // TODO: maybe record current value in trace?
         // trace!(player_info = current, "Acquired PlayerInfo");
-        let Some(changes) = detect_changes(&old, &current) else {
+        let changes = detect_changes(&old, &current);
+        if changes.is_empty() {
             continue;
-        };
+        }
 
-        debug!(
-            "Detected changes for {} on #{} with {:?}",
-            player_name,
-            connection.id(),
-            changes
-        );
+        debug!("Detected changes {:?}", changes);
         ctx.tx.send_rcon(RconEvent::Player {
             player: player.clone(),
             changes,
@@ -154,138 +150,125 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
 }
 
 /// Detects changes between two `PlayerInfo` and returns a list of activities the player did.
-fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Option<Vec<PlayerChanges>> {
-    if old.eq(new) {
-        return None;
+fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Vec<PlayerChanges> {
+    if *old == *new {
+        return vec![];
     }
 
-    let mut change_list = vec![];
+    let mut changes = vec![];
     detect(
-        &mut change_list,
+        &mut changes,
         &old.unit,
         &new.unit,
-        |old_unit, new_unit| PlayerChanges::Unit {
-            old: old_unit,
-            new: new_unit,
+        PlayerChanges::Unit {
+            old: old.unit,
+            new: new.unit,
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.team,
         &new.team,
-        |old_team, new_team| PlayerChanges::Team {
-            old: old_team,
-            new: new_team,
+        PlayerChanges::Team {
+            old: old.team.clone(),
+            new: new.team.clone(),
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.role,
         &new.role,
-        |old_role, new_role| PlayerChanges::Role {
-            old: old_role,
-            new: new_role,
+        PlayerChanges::Role {
+            old: old.role.clone(),
+            new: new.role.clone(),
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.loadout,
         &new.loadout,
-        |old_loadout, new_loadout| PlayerChanges::Loadout {
-            old: old_loadout,
-            new: new_loadout,
+        PlayerChanges::Loadout {
+            old: old.loadout.clone(),
+            new: new.loadout.clone(),
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.kills,
         &new.kills,
-        |old_kills, new_kills| PlayerChanges::Kills {
-            old: old_kills,
-            new: new_kills,
+        PlayerChanges::Kills {
+            old: old.kills,
+            new: new.kills,
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.deaths,
         &new.deaths,
-        |old_deaths, new_deaths| PlayerChanges::Deaths {
-            old: old_deaths,
-            new: new_deaths,
+        PlayerChanges::Deaths {
+            old: old.deaths,
+            new: new.deaths,
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.combat_score,
         &new.combat_score,
-        |old_score, new_score| PlayerChanges::Score {
+        PlayerChanges::Score {
             kind: ScoreKind::Combat,
-            old: old_score,
-            new: new_score,
+            old: old.combat_score,
+            new: new.combat_score,
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.offense_score,
         &new.offense_score,
-        |old_score, new_score| PlayerChanges::Score {
+        PlayerChanges::Score {
             kind: ScoreKind::Offense,
-            old: old_score,
-            new: new_score,
+            old: old.offense_score,
+            new: new.offense_score,
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.defense_score,
         &new.defense_score,
-        |old_score, new_score| PlayerChanges::Score {
+        PlayerChanges::Score {
             kind: ScoreKind::Defense,
-            old: old_score,
-            new: new_score,
+            old: old.defense_score,
+            new: new.defense_score,
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.support_score,
         &new.support_score,
-        |old_score, new_score| PlayerChanges::Score {
+        PlayerChanges::Score {
             kind: ScoreKind::Support,
-            old: old_score,
-            new: new_score,
+            old: old.support_score,
+            new: new.support_score,
         },
     );
 
     detect(
-        &mut change_list,
+        &mut changes,
         &old.level,
         &new.level,
-        |old_level, new_level| PlayerChanges::Level {
-            old: old_level,
-            new: new_level,
+        PlayerChanges::Level {
+            old: old.level,
+            new: new.level,
         },
     );
 
-    Some(change_list)
-}
-
-fn detect<T, F>(v: &mut Vec<PlayerChanges>, old: &T, new: &T, f: F)
-where
-    T: Clone + Eq,
-    F: FnOnce(T, T) -> PlayerChanges,
-{
-    if old.eq(new) {
-        return;
-    }
-
-    let p = f(old.clone(), new.clone());
-    v.push(p);
+    changes
 }

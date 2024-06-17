@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until, take_while1},
-    character::complete::{char, hex_digit1},
+    character::complete::char,
     combinator::recognize,
     error::{Error, ErrorKind},
     multi::many0,
@@ -42,10 +42,10 @@ pub enum LogKind {
         is_teamkill: bool,
         weapon: String,
     },
-    MatchStart {
+    GameStart {
         map: String,
     },
-    MatchEnd {
+    GameEnd {
         map: String,
         allied_score: u64,
         axis_score: u64,
@@ -178,7 +178,7 @@ fn parse_faction_player(input: &str) -> IResult<&str, (String, Player)> {
 fn parse_faction_id(original_input: &str) -> IResult<&str, (String, PlayerId)> {
     let (input, (faction, player_id)) = delimited(
         char('('),
-        separated_pair(take_while1(|c| c != '/'), char('/'), hex_digit1),
+        separated_pair(take_while1(|c| c != '/'), char('/'), take_until(")")),
         char(')'),
     )(original_input)?;
 
@@ -188,9 +188,7 @@ fn parse_faction_id(original_input: &str) -> IResult<&str, (String, PlayerId)> {
             ErrorKind::LengthValue,
         )));
     }
-
     let (_, player_id) = PlayerId::take(player_id)?;
-
     Ok((input, (faction.to_string(), player_id)))
 }
 

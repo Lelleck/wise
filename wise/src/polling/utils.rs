@@ -29,3 +29,15 @@ pub async fn fetch<T>(
         },
     }
 }
+
+/// Detect a change bewteen old and new and
+pub fn detect<T, C>(v: &mut Vec<C>, old: &T, new: &T, c: C)
+where
+    T: Clone + Eq,
+{
+    if old.eq(new) {
+        return;
+    }
+
+    v.push(c);
+}

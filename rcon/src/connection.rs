@@ -4,6 +4,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
 use parsing::{
+    gamestate::GameState,
     playerids::parse_playerids,
     playerinfo::PlayerInfo,
     showlog::{parse_loglines, LogLine},
@@ -77,25 +78,25 @@ impl RconConnection {
     pub async fn fetch_playerinfo(&mut self, player_name: &str) -> Result<PlayerInfo, RconError> {
         let cmd = format!("PlayerInfo {}", player_name);
         let input = self.execute(false, cmd).await?;
-        PlayerInfo::parse(input.as_str())
+        PlayerInfo::parse(&input)
     }
 
     pub async fn fetch_playerids(&mut self) -> Result<Vec<Player>, RconError> {
         let cmd = format!("Get PlayerIds");
         let input = self.execute(true, cmd).await?;
-        parse_playerids(input.as_str())
+        parse_playerids(&input)
     }
 
     pub async fn fetch_showlog(&mut self, minutes: u64) -> Result<Vec<LogLine>, RconError> {
         let cmd = format!("ShowLog {}", minutes);
         let input = self.execute(true, cmd).await?;
-        parse_loglines(input.as_str())
+        parse_loglines(&input)
     }
 
-    pub async fn fetch_gamestate(&mut self) -> Result<(), RconError> {
+    pub async fn fetch_gamestate(&mut self) -> Result<GameState, RconError> {
         let cmd = format!("Get GameState");
-        _ = self.execute(false, cmd).await?;
-        Ok(())
+        let input = self.execute(false, cmd).await?;
+        GameState::parse(&input)
     }
 
     /// Continue receiving and discarding any input for the given duration.

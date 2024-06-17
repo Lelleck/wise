@@ -15,7 +15,7 @@ use super::{player::PlayerId, Player};
 /// # Parses
 /// `1\tPlayer : 11111111111111111\t`
 /// `\tPlayer : 11111111111111111\t`
-fn parse_from_playerids(input: &str) -> IResult<&str, Player> {
+fn take_player(input: &str) -> IResult<&str, Player> {
     let (input, _) = take_until("\t")(input)?;
     let (input, _) = tag("\t")(input)?;
     let (input, encoded_player) = take_until("\t")(input)?;
@@ -41,5 +41,5 @@ fn parse_from_playerids(input: &str) -> IResult<&str, Player> {
 }
 
 pub fn parse_playerids(input: &str) -> Result<Vec<Player>, RconError> {
-    Ok(many0(parse_from_playerids)(input).map(|o| o.1)?)
+    Ok(many0(take_player)(input).map(|o| o.1)?)
 }

@@ -2,7 +2,7 @@ import websocket  # Requires the 'websocket-client' library
 from datetime import datetime
 import wise_lib
 
-ADDRESS = "wss://localhost:25052"
+ADDRESS = "ws://localhost:25052"
 PASSWORD = None
 
 def on_message(ws, message):

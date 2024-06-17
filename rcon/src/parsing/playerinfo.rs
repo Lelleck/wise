@@ -33,12 +33,12 @@ impl PlayerInfo {
             return Err(RconError::Failure);
         }
 
-        Ok(parse_playerinfo(input).map(|o| o.1)?) // ?!
+        Ok(take_playerinfo(input).map(|o| o.1)?)
     }
 }
 
 /// Parses scores.
-fn parse_score(input: &str) -> IResult<&str, (u64, u64, u64, u64)> {
+fn take_score(input: &str) -> IResult<&str, (u64, u64, u64, u64)> {
     // Made to parse:
     //C 0, O 0, D 0, S 0
     return map(
@@ -56,7 +56,7 @@ fn parse_score(input: &str) -> IResult<&str, (u64, u64, u64, u64)> {
     )(input);
 }
 
-fn parse_playerinfo(input: &str) -> IResult<&str, PlayerInfo> {
+fn take_playerinfo(input: &str) -> IResult<&str, PlayerInfo> {
     return map(
         tuple((
             tag("Name: "),
@@ -78,7 +78,7 @@ fn parse_playerinfo(input: &str) -> IResult<&str, PlayerInfo> {
             tag(" - Deaths: "),
             map_res(digit1, parse_u64),
             tag("\nScore: "),
-            parse_score,
+            take_score,
             tag("\nLevel: "),
             map_res(digit1, parse_u64),
         )),
@@ -102,11 +102,11 @@ fn parse_playerinfo(input: &str) -> IResult<&str, PlayerInfo> {
             _,
             level,
         )| PlayerInfo {
-            name: name.to_string(),
+            name: name.into(),
             id: id.1,
-            team: team.to_string(),
-            role: role.to_string(),
-            loadout: loadout.map(|s| s.1.to_string()),
+            team: team.into(),
+            role: role.into(),
+            loadout: loadout.map(|s| s.1.into()),
             unit: unit.map(|u| u.1),
             kills,
             deaths,

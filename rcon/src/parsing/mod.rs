@@ -1,3 +1,4 @@
+pub mod gamestate;
 pub mod player;
 pub mod playerids;
 pub mod playerinfo;

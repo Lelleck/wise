@@ -4,19 +4,20 @@ use tokio::sync::watch::Receiver;
 
 use crate::{config::FileConfig, exporting::queue::EventSender};
 
+pub mod gamestate;
 pub mod playerinfo;
 pub mod showlog;
 mod utils;
 
 #[derive(Debug)]
-pub struct PollingContext {
+pub struct PollerContext {
     pub id: u64,
     pub config: Arc<FileConfig>,
     pub rx: Receiver<()>,
     pub tx: EventSender,
 }
 
-impl PollingContext {
+impl PollerContext {
     pub fn new(
         config: Arc<FileConfig>,
         rx: Receiver<()>,
