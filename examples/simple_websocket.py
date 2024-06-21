@@ -1,9 +1,14 @@
 import websocket  # Requires the 'websocket-client' library
 from datetime import datetime
 import wise_lib
+import sys
 
-ADDRESS = "ws://localhost:25052"
-PASSWORD = None
+if len(sys.argv) == 3:
+    ADDRESS = sys.argv[1]
+    PASSWORD = sys.argv[2]
+else:
+    ADDRESS = "ws://localhost:25052"
+    PASSWORD = None
 
 def on_message(ws, message):
     message = wise_lib.parse_wise_event(message)

@@ -4,9 +4,14 @@ from datetime import datetime
 import wise_lib
 import ssl
 import math
+import sys
 
-ADDRESS = "ws://localhost:25052"
-PASSWORD = None
+if len(sys.argv) == 3:
+    ADDRESS = sys.argv[1]
+    PASSWORD = sys.argv[2]
+else:
+    ADDRESS = "ws://localhost:25052"
+    PASSWORD = None
 
 def on_message(ws, message):
     message = wise_lib.parse_wise_event(message)
@@ -81,32 +86,25 @@ def on_message(ws, message):
             print_prelude("GAME")
             # TODO: fix this, actually join them together
 
-            central_text = ""
-            actual_text = ""
+            texts = []
             for change in special_changes:
                 key, value = wise_lib.get_enum_variant(change)
-                actual_text += f", {format(Fore.white, key, value.old, value.new)}"
-                central_text += f"{Back.dark_blue}{actual_text}{Style.reset}"
+                texts.append(format(Fore.WHITE, key, value.old, value.new, Back.DARK_BLUE, ""))
 
-            MAX_SIZE = 66
-            buffer_size = len(actual_text)
-            buffer_left = " " * math.floor((MAX_SIZE - buffer_size) / 2)
-            text = f"{buffer_left}{central_text}"
-
-            print(text)
+            print(f"{' ' * 10}{Back.DARK_BLUE} {', '.join(texts)} {Style.RESET}")
         
         if other_changes:
             print_prelude("GAME")
 
-            text = ""
+            texts = []
             for change in other_changes:
                 key, value = wise_lib.get_enum_variant(change)
-                text += f", {format(Fore.white, key, value.old, value.new)}"
+                texts.append(format(Fore.DARK_BLUE, key, value.old, value.new))
 
-            print(text)
+            print(', '.join(texts))
 
         if not other_changes and not special_changes:
-            print(f"{Fore.magenta}{Style.bold}Start polling{Style.reset}")
+            print(f"{Fore.MAGENTA}{Style.BOLD}Start polling{Style.RESET}")
 
 def reflection_print(change):
     key, value = wise_lib.get_enum_variant(change)
@@ -134,8 +132,8 @@ def print_prelude(type):
     fmt_time = current_time.strftime("%H:%M:%S")
     print(f"{back} {fmt_time}{Style.bold}{fore} - {type} {Style.reset} ", end="")
 
-def format(color, type, old, new):
-    return f"{Style.bold}{color}{type}{Style.reset} {Fore.grey_0}{old}{Style.reset} → {Style.bold}{new}{Style.reset}"
+def format(color, type, old, new, back_color="", end=Style.RESET):
+    return f"{Style.RESET}{Style.BOLD}{back_color}{color}{type}{Style.RESET}{back_color} {Fore.GREY_0}{old}{Fore.WHITE} → {Style.BOLD}{new}{end}"
 
 def on_error(ws, error):
     print(f"Error: {error}")
