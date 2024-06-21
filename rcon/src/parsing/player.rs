@@ -37,9 +37,11 @@ impl PlayerId {
     }
 
     pub fn take(input: &str) -> IResult<&str, Self> {
+        // Make sure that UUID check comes first as the u64 check may simple consume the
+        // first digit of the UUID.
         alt((
-            map(take_u64, PlayerId::Steam),
             map(take_uuid, PlayerId::Windows),
+            map(take_u64, PlayerId::Steam),
         ))(input)
     }
 
