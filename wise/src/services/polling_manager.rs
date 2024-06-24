@@ -80,14 +80,14 @@ impl PollingManager {
         let (ctx, tx) = self.create_ctx();
         let ctx_id = ctx.id;
         let self_clone = self.clone();
-        let handle = tokio::spawn(async move { poll_showlog(self_clone, ctx).await });
+        let handle = tokio::spawn(async move { _ = poll_showlog(self_clone, ctx).await });
         self.register_poller(ctx_id, tx, handle).await;
     }
 
     async fn start_gamestate_poller(&mut self) {
         let (ctx, tx) = self.create_ctx();
         let ctx_id = ctx.id;
-        let handle = tokio::spawn(async move { poll_gamestate(ctx).await });
+        let handle = tokio::spawn(async move { _ = poll_gamestate(ctx).await });
         self.register_poller(ctx_id, tx, handle).await;
     }
 
@@ -100,7 +100,7 @@ impl PollingManager {
         let (ctx, tx) = self.create_ctx();
         let ctx_id = ctx.id;
         let poller_player = player.clone();
-        let handle = tokio::spawn(async move { poll_playerinfo(poller_player, ctx).await });
+        let handle = tokio::spawn(async move { _ = poll_playerinfo(poller_player, ctx).await });
 
         self.register_poller(ctx_id, tx, handle).await;
         self.player_map.lock().await.insert(player, ctx_id);
@@ -123,7 +123,7 @@ impl PollingManager {
         let id = self.get_id();
         let (tx, rx) = watch::channel(());
         (
-            PollingContext::new((*self.config).clone(), rx, id, (*self.sender).clone()),
+            PollingContext::new((*self.config).clone(), rx, id, (*self.sender).clone(), self.connection_pool.clone()),
             tx,
         )
     }

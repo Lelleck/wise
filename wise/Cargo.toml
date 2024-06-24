@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 rcon = { version = "0.1.0", path = "../rcon" }
-bytes = "1.6.0"
 thiserror = "1.0.61"
 tokio = { version = "1.38.0", features = ["full"] }
 lazy_static = "1.4.0"
@@ -25,3 +24,4 @@ rustls-pemfile = "2.1.2"
 tokio-rustls = { version = "0.26.0", default-features = false, features = ["ring"] }
 notify = "6.1.1"
 futures = "0.3.30"
+rand = "0.8.5"

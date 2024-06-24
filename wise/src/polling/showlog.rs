@@ -1,45 +1,23 @@
-use rcon::{
-    connection::RconConnection,
-    parsing::showlog::{LogKind, LogLine},
-};
-use tracing::{debug, error, instrument, warn};
+use rcon::parsing::showlog::{LogKind, LogLine};
+use tracing::{debug, instrument};
 
 use crate::{event::RconEvent, polling_manager::PollingManager};
 
-use super::{
-    utils::{fetch, PollWaiter},
-    PollingContext,
-};
+use super::{utils::PollWaiter, PollingContext};
 
 #[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
-pub async fn poll_showlog(mut manager: PollingManager, mut ctx: PollingContext) {
+pub async fn poll_showlog(
+    mut manager: PollingManager,
+    mut ctx: PollingContext,
+) -> Result<(), Box<dyn std::error::Error>> {
     // TODO: use the rx
     let mut waiter = PollWaiter::new(ctx.config.clone());
-    let mut config = ctx.config();
-    let connection = RconConnection::new(&config.rcon).await;
-    if let Err(e) = connection {
-        warn!("Failed to establish connection: {}", e);
-        return;
-    }
-    let mut connection = connection.unwrap();
     let mut known_logs = vec![];
 
     loop {
         waiter.wait().await;
-        config = ctx.config();
+        let new_logs = ctx.pool.execute(|c| Box::pin(c.fetch_showlog(1))).await?;
 
-        let fetch_showlog = connection.fetch_showlog(1).await;
-        let new_logs = fetch(&mut connection, fetch_showlog, &config.rcon).await;
-        if let Err((recoverable, e)) = new_logs {
-            if !recoverable {
-                error!("Unrecoverable error: {}", e);
-                return;
-            }
-
-            warn!("Recoverable error: {}", e);
-            continue;
-        }
-        let new_logs = new_logs.unwrap();
         let untracked_logs = merge_logs(&mut known_logs, new_logs);
         for log in untracked_logs {
             handle_untracked_log(&log, &mut manager, &mut ctx).await;

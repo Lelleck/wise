@@ -4,6 +4,7 @@ use futures::Future;
 use rcon::{connection::RconConnection, RconError};
 use thiserror::Error;
 use tokio::sync::Mutex;
+use tracing::trace;
 
 use crate::config::AppConfig;
 
@@ -88,7 +89,10 @@ impl ConnectionPool {
     }
 
     async fn return_connection(&mut self, connection: RconConnection) {
-        self.connections.lock().await.push_back(connection);
+        let mut lock = self.connections.lock().await;
+        lock.push_back(connection);
+        let size = lock.len();
+        trace!("Returned connection current size {}", size + 1);
     }
 
     /// Get a connection from the pool or try to allocate one if the pool is empty.
@@ -104,6 +108,7 @@ impl ConnectionPool {
     /// Attempt to allocate a connection.
     async fn allocate_connection(&mut self) -> Result<RconConnection, PoolError> {
         let config = self.config.borrow().rcon.clone();
-        Ok(RconConnection::new(&config).await?)
+        let conn = RconConnection::new(&config).await?;
+        Ok(conn)
     }
 }

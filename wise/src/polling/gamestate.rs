@@ -1,11 +1,11 @@
-use rcon::{connection::RconConnection, parsing::gamestate::GameState};
+use rcon::parsing::gamestate::GameState;
 use serde::Serialize;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, instrument};
 
 use crate::event::RconEvent;
 
 use super::{
-    utils::{detect, fetch, PollWaiter},
+    utils::{detect, PollWaiter},
     PollingContext,
 };
 
@@ -20,33 +20,13 @@ pub enum GameStateChanges {
 }
 
 #[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
-pub async fn poll_gamestate(mut ctx: PollingContext) {
+pub async fn poll_gamestate(mut ctx: PollingContext) -> Result<(), Box<dyn std::error::Error>> {
     let mut waiter = PollWaiter::new(ctx.config.clone());
-    let mut config = ctx.config();
-    let connection = RconConnection::new(&config.rcon).await;
-    if let Err(e) = connection {
-        warn!("Failed to establish connection: {}", e);
-        return;
-    }
-    let mut connection = connection.unwrap();
     let mut previous = None;
 
     loop {
         waiter.wait().await;
-        config = ctx.config();
-
-        let fetch_gamestate = connection.fetch_gamestate().await;
-        let new_gamestate = fetch(&mut connection, fetch_gamestate, &config.rcon).await;
-        if let Err((recoverable, e)) = new_gamestate {
-            if !recoverable {
-                error!("Unrecoverable error: {}", e);
-                return;
-            }
-
-            warn!("Recoverable error: {}", e);
-            continue;
-        }
-        let current = new_gamestate.unwrap();
+        let current = ctx.pool.execute(|c| Box::pin(c.fetch_gamestate())).await?;
 
         if previous.is_none() {
             debug!("Started polling with: {:?}", current);

@@ -1,38 +1,9 @@
 use std::time::{Duration, Instant};
 
-use rcon::{
-    connection::{RconConnection, RconCredentials},
-    RconError,
-};
+use rand::{thread_rng, Rng};
 use tokio::time::sleep;
 
 use crate::config::AppConfig;
-
-/// Failure resilient utility function to call an async function and automatically handle it.
-pub async fn fetch<T>(
-    connection: &mut RconConnection,
-    res: Result<T, RconError>,
-    credentials: &RconCredentials,
-) -> Result<T, (bool, RconError)> {
-    match res {
-        Ok(value) => Ok(value),
-        Err(e) => match e {
-            RconError::IoError(_) => {
-                let new_connection = RconConnection::new(credentials).await;
-                if new_connection.is_err() {
-                    return Err((false, e));
-                }
-                *connection = new_connection.unwrap();
-                return Err((true, e));
-            }
-            RconError::InvalidData | RconError::ParsingError(_) | RconError::Failure => {
-                _ = connection.clean(Duration::from_secs(5)).await;
-                return Err((true, e));
-            }
-            RconError::InvalidPassword => unreachable!(),
-        },
-    }
-}
 
 /// Detect a change bewteen old and new and
 pub fn detect<T, C>(v: &mut Vec<C>, old: &T, new: &T, c: C)
@@ -68,7 +39,11 @@ impl PollWaiter {
             .checked_sub(execution_time)
             .unwrap_or(Duration::ZERO);
 
-        sleep(actual_wait).await;
+        // There is unexplained behaviour which causes all threads using the pool to sync up and
+        // cause uneeded connections.
+        let spread_wait = actual_wait + Duration::from_millis(thread_rng().gen_range(0..50));
+
+        sleep(spread_wait).await;
         self.last_executed = Instant::now();
     }
 }

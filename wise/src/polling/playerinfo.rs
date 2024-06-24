@@ -2,13 +2,10 @@ use std::fmt::Debug;
 
 use crate::event::RconEvent;
 
-use super::utils::{detect, fetch, PollWaiter};
-use rcon::{
-    connection::RconConnection,
-    parsing::{playerinfo::PlayerInfo, Player},
-};
+use super::utils::{detect, PollWaiter};
+use rcon::parsing::{playerinfo::PlayerInfo, Player};
 use serde::Serialize;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, instrument};
 
 use super::PollingContext;
 
@@ -65,59 +62,32 @@ pub enum ScoreKind {
     Support,
 }
 
-const RECOVERABLE_MAX: i32 = 10;
-
 /// Consistently polls the current state of a player and records the changes.
 #[instrument(level = "debug", skip_all, fields(player = ?player, poller_id = ctx.id))]
-pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
+pub async fn poll_playerinfo(
+    player: Player,
+    mut ctx: PollingContext,
+) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Starting player poller");
     let player_name = player.name.clone();
     let mut waiter = PollWaiter::new(ctx.config.clone());
-    let mut config = ctx.config();
-    let connection = RconConnection::new(&config.rcon).await;
-    if let Err(e) = connection {
-        warn!("Failed to establish connection: {}", e);
-        return;
-    }
-    let mut connection = connection.unwrap();
     let mut previous = None;
-    let mut recoverable_count = 0;
 
     // Stop the loop if has_changed is false or has_changed is true
     while ctx.rx.has_changed().map_or(false, |changed| !changed) {
         waiter.wait().await;
-        config = ctx.config();
 
-        let fetch_playerinfo = connection.fetch_playerinfo(&player_name).await;
-        let current = fetch(&mut connection, fetch_playerinfo, &config.rcon).await;
-
-        if let Err((recoverable, e)) = current {
-            if !recoverable {
-                error!("Encountered unrecoverable error: {}", e);
-                return;
-            }
-
-            recoverable_count += 1;
-            if recoverable_count > RECOVERABLE_MAX {
-                error!(
-                    "Encountered too many recoverable errors ({}/{}): {}",
-                    recoverable_count, RECOVERABLE_MAX, e
-                );
-                return;
-            }
-
-            if matches!(e, rcon::RconError::Failure) {
-                continue;
-            }
-
-            warn!(
-                "Encountered recoverable error ({}/{}): {}",
-                recoverable_count, RECOVERABLE_MAX, e
-            );
-            continue;
-        }
-        let current = current.unwrap();
-        recoverable_count = 0;
+        // I don't know what the f*** this is and I don't care. This f******
+        // execute method is super janky generally. Maybe it will be looked at
+        // again sometime in the future.
+        let cloned_player_name = player_name.clone();
+        let current = ctx
+            .pool
+            .execute(move |c| {
+                let owned = cloned_player_name.clone();
+                Box::pin(c.fetch_playerinfo(owned))
+            })
+            .await?;
 
         if previous.is_none() {
             debug!("Started polling with: {:?}", current);
@@ -146,7 +116,9 @@ pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
         });
         previous = Some(current);
     }
+
     debug!("Received cancellation request... Stopping polling");
+    Ok(())
 }
 
 /// Detects changes between two `PlayerInfo` and returns a list of activities the player did.
