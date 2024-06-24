@@ -1,68 +1,85 @@
 pub mod config;
 pub mod event;
 pub mod exporting;
-pub mod manager;
 pub mod polling;
+pub mod services;
 
-use std::{sync::Arc, time::Duration};
+pub mod utils;
+
+use std::{error::Error, sync::Arc, time::Duration};
 
 use clap::Parser;
-use config::{CliConfig, FileConfig};
+use config::{setup_config, AppConfig, CliConfig};
 
-use exporting::{
-    queue::EventSender,
-    websocket::{self},
-};
-use manager::Manager;
-use tokio::{
-    sync::{broadcast, Mutex},
-    time::sleep,
-};
-use tracing::{error, info, Level};
-use tracing_subscriber::fmt;
+use exporting::{queue::EventSender, setup_exporting};
+use services::*;
+use tokio::{sync::Mutex, time::sleep};
+use tracing::{error, info, level_filters::LevelFilter};
+use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, Layer};
 
-use rcon::connection::RconConnection;
+use rcon::connection::{RconConnection, RconCredentials};
+use utils::get_levelfilter;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli_config = CliConfig::parse();
-    fmt().with_max_level(Level::INFO).init();
-    info!("Logging & CLI config initialized... Loading file config");
-    let file_config = FileConfig::new(cli_config.config_file)?;
+async fn main() -> Result<(), Box<dyn Error>> {
+    let config = load_config()?;
     info!("File config intialized... Testing connectivity to server");
 
-    let connection = RconConnection::new(&file_config.rcon).await;
+    let mut connection = test_connectivity(&config.borrow().rcon).await?;
+    info!("Connection to server successfully tested... Starting wise");
+
+    let tx = EventSender::new();
+
+    setup_exporting(&config, &tx).await?;
+    let manager = PollingManager::new(config, tx);
+    let arc_manager = Arc::new(Mutex::new(manager));
+    PollingManager::resume_polling(arc_manager, &mut connection).await?;
+
+    loop {
+        sleep(Duration::from_secs(1000)).await;
+    }
+}
+
+/// Loads the config from the file and setups logging.
+fn load_config() -> Result<AppConfig, Box<dyn Error>> {
+    let cli_config = CliConfig::parse();
+    let level = get_levelfilter(cli_config.verbosity.into());
+
+    let filtered_layer = fmt::Layer::default().with_filter(LevelFilter::INFO);
+    let (filtered_layer, reload_handle) = reload::Layer::new(filtered_layer);
+    tracing_subscriber::registry().with(filtered_layer).init();
+
+    info!(
+        "Logging ({}) & CLI config initialized... Loading file config",
+        level
+    );
+
+    let rx = setup_config(cli_config.config_file)?;
+    let mut rx_clone = rx.clone();
+    _ = tokio::spawn(async move {
+        loop {
+            _ = rx_clone
+                .wait_for(|obj| {
+                    _ = reload_handle
+                        .modify(|layer| *layer.filter_mut() = get_levelfilter(obj.logging.level));
+                    return true;
+                })
+                .await;
+        }
+    });
+
+    Ok(rx)
+}
+
+/// Test if connectivity to the server exists.
+async fn test_connectivity(
+    credentials: &RconCredentials,
+) -> Result<RconConnection, Box<dyn std::error::Error>> {
+    let connection = RconConnection::new(credentials).await;
     if let Err(e) = connection {
         error!("The test connection to the server failed: {e}");
         return Err(e.into());
     }
-    info!("Connection to server successfully tested... Starting wise");
-    let mut connection = connection.unwrap();
 
-    let tx = EventSender::new(broadcast::Sender::new(1000));
-    let arc_config = Arc::new(file_config);
-
-    if arc_config.exporting.websocket.enabled {
-        let ws_tx = tx.clone();
-        let ws_task = websocket::build_websocket(ws_tx, arc_config.clone()).await?;
-        _ = tokio::spawn(async move {
-            _ = ws_task.await;
-        });
-    }
-
-    /* tokio::spawn(async move {
-        _ = run_websocket_server(for_ws, for_ws_config).await;
-    });*/
-
-    let manager = Manager::new(arc_config, tx);
-    let arc_manager = Arc::new(Mutex::new(manager));
-
-    if let Err(e) = Manager::resume_polling(arc_manager, &mut connection).await {
-        error!("Failed to start polling: {}", e);
-        return Err(e.into());
-    };
-
-    loop {
-        sleep(Duration::from_secs(1000000)).await; // randomly choosen
-    }
+    Ok(connection.unwrap())
 }

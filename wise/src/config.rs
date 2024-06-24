@@ -1,20 +1,33 @@
 //! All file configuration and CLI parameter operation.
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use config::{Config, ConfigError, File};
+use notify::{EventKind, Watcher};
 use rcon::connection::RconCredentials;
 use serde::Deserialize;
 use serde_with::serde_as;
+use tokio::sync::{
+    mpsc::channel,
+    watch::{self, Sender},
+};
+use tracing::{debug, error, info};
 
 /// Configuration
-#[derive(Parser, Debug)]
+#[derive(Parser, Clone, Debug)]
 #[command(name = "Wise")]
 pub struct CliConfig {
     /// The configuration file to use.
-    #[clap(short, long, value_parser, default_value = "wise-config.toml")]
+    #[clap(short, long, default_value = "wise-config.toml")]
     pub config_file: PathBuf,
+
+    /// Configure how verbose the application should start up with. `v` is Debug, `vv` is Trace
+    #[arg(short, long, action = ArgAction::Count)]
+    pub verbosity: u8,
 }
 
 impl CliConfig {}
@@ -59,6 +72,13 @@ pub struct WebSocketConfig {
     pub key_file: Option<String>,
 }
 
+/// Configure logggin of the application.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoggingConfig {
+    #[serde(default)]
+    pub level: i32,
+}
+
 /// Overall configuration of the application.
 #[derive(Debug, Clone, Deserialize)]
 pub struct FileConfig {
@@ -70,15 +90,66 @@ pub struct FileConfig {
 
     /// Configuration for different modes of exporting.
     pub exporting: ExportingConfig,
+
+    /// Configuration for logging behaviour.
+    pub logging: LoggingConfig,
 }
 
-impl FileConfig {
-    pub fn new(config_file: PathBuf) -> Result<Self, ConfigError> {
-        let config = Config::builder()
-            .add_source(File::with_name(config_file.as_path().to_str().unwrap()))
-            .build()
-            .expect("Failed to build config");
+pub type AppConfig = watch::Receiver<FileConfig>;
 
-        config.try_deserialize()
+/// Initially load the [`FileConfig`] and start a background file watcher to continously update it.
+pub fn setup_config(path: PathBuf) -> Result<AppConfig, ConfigError> {
+    let file_config = load_config(&path)?;
+    let (tx, rx) = watch::channel(file_config);
+    _ = tokio::spawn(async move {
+        _ = watch_config(path, tx).await;
+    });
+    Ok(rx)
+}
+
+/// Create a [`FileConfig`] from a given [`PathBuf`].
+fn load_config(path: &Path) -> Result<FileConfig, ConfigError> {
+    let config = Config::builder()
+        .add_source(File::with_name(path.to_str().unwrap()))
+        .build()?;
+
+    config.try_deserialize()
+}
+
+/// Continously watch the given file for updates and if detected update the given [`AppConfig`].
+async fn watch_config(
+    path: PathBuf,
+    config_tx: Sender<FileConfig>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (tx, mut rx) = channel(1);
+    let mut watcher = notify::recommended_watcher(move |res| {
+        futures::executor::block_on(async {
+            tx.send(res).await.unwrap();
+        });
+    })?;
+    watcher.watch(&path, notify::RecursiveMode::NonRecursive)?;
+
+    while let Some(event) = rx.recv().await {
+        if let Err(e) = event {
+            error!("Configuration file watcher returned error: {}", e);
+            continue;
+        }
+
+        let event_kind = event.unwrap().kind;
+        debug!("Received configuration file event: {:?}", event_kind);
+        let EventKind::Modify(_) = event_kind else {
+            continue;
+        };
+
+        let file_config = load_config(&path);
+        match file_config {
+            Ok(file_config) => {
+                config_tx.send(file_config).unwrap();
+                info!("Updated config");
+            }
+            Err(e) => error!("Failed to load updated config: {}", e),
+        }
     }
+
+    Ok(())
 }

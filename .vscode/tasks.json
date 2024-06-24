@@ -4,6 +4,11 @@
 		{
 			"type": "shell",
 			"command": "cargo",
+			"options": {
+				"env": {
+					"RUST_BACKTRACE": "full"
+				}
+			},
 			"args": [
 				"run",
 				"--",

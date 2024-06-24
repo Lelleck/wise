@@ -10,7 +10,7 @@ use tokio_rustls::{rustls::ServerConfig, TlsAcceptor};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info};
 
-use crate::config::{FileConfig, WebSocketConfig};
+use crate::config::{AppConfig, WebSocketConfig};
 use futures_util::{Future, SinkExt, StreamExt};
 
 use super::queue::{EventReceiver, EventSender};
@@ -18,10 +18,10 @@ use super::queue::{EventReceiver, EventSender};
 /// Build the websocket connection.
 pub async fn build_websocket(
     tx: EventSender,
-    config: Arc<FileConfig>,
+    config: AppConfig,
 ) -> Result<impl Future<Output = Result<(), Box<dyn Error>>>, Box<dyn Error>> {
-    let ws_config = config.exporting.websocket.clone();
     debug!("Initializing exporting over websockets");
+    let ws_config = &config.borrow().exporting.websocket;
 
     let acceptor = if ws_config.tls {
         Some(build_tls_ws(&ws_config)?)
@@ -30,12 +30,7 @@ pub async fn build_websocket(
     };
     let listener = TcpListener::bind(&ws_config.address).await?;
 
-    Ok(run_websocket(
-        tx,
-        listener,
-        acceptor,
-        config.exporting.websocket.clone(),
-    ))
+    Ok(run_websocket(tx, listener, acceptor, config.clone()))
 }
 
 /// Build the TLS configuration for the websocket.
@@ -68,7 +63,7 @@ pub async fn run_websocket(
     tx: EventSender,
     listener: TcpListener,
     acceptor: Option<TlsAcceptor>,
-    ws_config: WebSocketConfig,
+    ws_config: AppConfig,
 ) -> Result<(), Box<dyn Error>> {
     if acceptor.is_some() {
         info!(
@@ -122,7 +117,7 @@ enum WebSocketError {
 
 /// Handle a single websocket connection.
 async fn handle_connection<T>(
-    ws_config: WebSocketConfig,
+    config: AppConfig,
     stream: T,
     mut rx: EventReceiver,
 ) -> Result<(), Box<dyn Error>>
@@ -131,9 +126,10 @@ where
 {
     let ws_stream = tokio_tungstenite::accept_async(stream).await?;
     let (mut write, mut read) = ws_stream.split();
+    let password = config.borrow().exporting.websocket.password.clone();
 
-    if ws_config.password.is_some() {
-        let password = ws_config.password.as_ref().unwrap();
+    if password.is_some() {
+        let password = password.as_ref().unwrap();
         let received = timeout(Duration::from_secs(5), read.next())
             .await
             .map_err(|_| WebSocketError::PasswordTimeout)?;

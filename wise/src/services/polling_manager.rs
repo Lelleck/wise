@@ -12,7 +12,7 @@ use tokio::{
 use tracing::{debug, warn};
 
 use crate::{
-    config::FileConfig,
+    config::AppConfig,
     exporting::queue::EventSender,
     polling::{
         gamestate::poll_gamestate, playerinfo::poll_playerinfo, showlog::poll_showlog,
@@ -21,18 +21,18 @@ use crate::{
 };
 
 /// Centrally manages all running pollers.
-pub struct Manager {
+pub struct PollingManager {
     running_id: u64,
     task_map: HashMap<u64, TaskEntry>,
     player_map: HashMap<Player, u64>,
-    config: Arc<FileConfig>,
+    config: AppConfig,
     sender: EventSender,
 }
 
 struct TaskEntry(#[allow(dead_code)] JoinHandle<()>, Sender<()>);
 
-impl Manager {
-    pub fn new(config: Arc<FileConfig>, sender: EventSender) -> Self {
+impl PollingManager {
+    pub fn new(config: AppConfig, sender: EventSender) -> Self {
         Self {
             running_id: 0,
             task_map: HashMap::new(),
@@ -47,32 +47,36 @@ impl Manager {
     /// - GameState polling
     /// - polling all players returned in the in `Get PlayerIds` command
     pub async fn resume_polling(
-        arc_manager: Arc<Mutex<Manager>>,
+        arc_manager: Arc<Mutex<PollingManager>>,
         connection: &mut RconConnection,
     ) -> Result<(), RconError> {
         debug!("Starting/Resuming global polling");
-
         let players = connection.fetch_playerids().await?;
         let mut manager = arc_manager.lock().await;
+        let cooldown = manager.config.borrow().polling.cooldown_ms;
+
         debug!("Starting polling for {} players", players.len());
         for player in players {
             manager.start_playerinfo_poller(player);
-            sleep(manager.config.polling.cooldown_ms).await;
+            sleep(cooldown).await;
         }
 
-        Manager::start_showlog_poller(&mut manager, arc_manager.clone());
-        Manager::start_gamestate_poller(&mut manager);
+        PollingManager::start_showlog_poller(&mut manager, arc_manager.clone());
+        PollingManager::start_gamestate_poller(&mut manager);
         Ok(())
     }
 
-    fn start_showlog_poller(manager: &mut MutexGuard<Manager>, arc_manager: Arc<Mutex<Manager>>) {
+    fn start_showlog_poller(
+        manager: &mut MutexGuard<PollingManager>,
+        arc_manager: Arc<Mutex<PollingManager>>,
+    ) {
         let (ctx, tx) = manager.create_ctx();
         let ctx_id = ctx.id;
         let handle = tokio::spawn(async move { poll_showlog(arc_manager, ctx).await });
         manager.register_poller(ctx_id, tx, handle);
     }
 
-    fn start_gamestate_poller(manager: &mut MutexGuard<Manager>) {
+    fn start_gamestate_poller(manager: &mut MutexGuard<PollingManager>) {
         let (ctx, tx) = manager.create_ctx();
         let ctx_id = ctx.id;
         let handle = tokio::spawn(async move { poll_gamestate(ctx).await });

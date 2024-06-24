@@ -2,14 +2,18 @@ use tokio::sync::{broadcast::Receiver, broadcast::Sender};
 
 use crate::event::{RconEvent, WiseEvent};
 
+const EVENT_QUEUE_CAPACITY: usize = 1000;
+
 #[derive(Debug, Clone)]
 pub struct EventSender {
     tx: Sender<WiseEvent>,
 }
 
 impl EventSender {
-    pub fn new(tx: Sender<WiseEvent>) -> Self {
-        Self { tx }
+    pub fn new() -> Self {
+        Self {
+            tx: Sender::new(EVENT_QUEUE_CAPACITY),
+        }
     }
 
     pub fn receiver(&self) -> EventReceiver {

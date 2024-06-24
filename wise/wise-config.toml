@@ -1,3 +1,6 @@
+[logging]
+level = 0 # The logging level to use, overrides passed by argument. `-2` is only error, `2` is everything.
+
 [rcon]
 address = "" # The address and port to connect to
 password = "" # The password used to login

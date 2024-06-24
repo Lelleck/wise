@@ -1,35 +1,38 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use rcon::{
     connection::RconConnection,
     parsing::showlog::{LogKind, LogLine},
 };
-use tokio::{
-    sync::{Mutex, MutexGuard},
-    time::sleep,
-};
+use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, error, instrument, warn};
 
-use crate::{event::RconEvent, manager::Manager};
+use crate::{event::RconEvent, polling_manager::PollingManager};
 
-use super::{utils::fetch, PollerContext};
+use super::{
+    utils::{fetch, PollWaiter},
+    PollerContext,
+};
 
 #[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
-pub async fn poll_showlog(manager: Arc<Mutex<Manager>>, mut ctx: PollerContext) {
+pub async fn poll_showlog(manager: Arc<Mutex<PollingManager>>, mut ctx: PollerContext) {
     // TODO: use the rx
-    let connection = RconConnection::new(&ctx.config.rcon).await;
+    let mut waiter = PollWaiter::new(ctx.config.clone());
+    let mut config = ctx.config();
+    let connection = RconConnection::new(&config.rcon).await;
     if let Err(e) = connection {
         warn!("Failed to establish connection: {}", e);
         return;
     }
     let mut connection = connection.unwrap();
-
     let mut known_logs = vec![];
+
     loop {
-        sleep(Duration::from_secs(1)).await;
+        waiter.wait().await;
+        config = ctx.config();
 
         let fetch_showlog = connection.fetch_showlog(1).await;
-        let new_logs = fetch(&mut connection, fetch_showlog, &ctx.config).await;
+        let new_logs = fetch(&mut connection, fetch_showlog, &config.rcon).await;
         if let Err((recoverable, e)) = new_logs {
             if !recoverable {
                 error!("Unrecoverable error: {}", e);
@@ -61,7 +64,7 @@ fn merge_logs(old_logs: &mut Vec<LogLine>, new_logs: Vec<LogLine>) -> Vec<LogLin
 
 fn handle_untracked_log(
     log_line: &LogLine,
-    manager: &mut MutexGuard<Manager>,
+    manager: &mut MutexGuard<PollingManager>,
     ctx: &mut PollerContext,
 ) {
     ctx.tx.send_rcon(RconEvent::Log(log_line.clone()));

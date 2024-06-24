@@ -1,8 +1,9 @@
-use std::sync::Arc;
-
 use tokio::sync::watch::Receiver;
 
-use crate::{config::FileConfig, exporting::queue::EventSender};
+use crate::{
+    config::{AppConfig, FileConfig},
+    exporting::queue::EventSender,
+};
 
 pub mod gamestate;
 pub mod playerinfo;
@@ -12,23 +13,22 @@ mod utils;
 #[derive(Debug)]
 pub struct PollerContext {
     pub id: u64,
-    pub config: Arc<FileConfig>,
+    pub config: AppConfig,
     pub rx: Receiver<()>,
     pub tx: EventSender,
 }
 
 impl PollerContext {
-    pub fn new(
-        config: Arc<FileConfig>,
-        rx: Receiver<()>,
-        id: u64,
-        broadcaster: EventSender,
-    ) -> Self {
+    pub fn new(config: AppConfig, rx: Receiver<()>, id: u64, broadcaster: EventSender) -> Self {
         return Self {
             config,
             rx,
             id,
             tx: broadcaster,
         };
+    }
+
+    pub fn config(&self) -> FileConfig {
+        self.config.borrow().clone()
     }
 }

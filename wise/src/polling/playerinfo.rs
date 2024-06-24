@@ -2,13 +2,12 @@ use std::fmt::Debug;
 
 use crate::event::RconEvent;
 
-use super::utils::{detect, fetch};
+use super::utils::{detect, fetch, PollWaiter};
 use rcon::{
     connection::RconConnection,
     parsing::{playerinfo::PlayerInfo, Player},
 };
 use serde::Serialize;
-use tokio::time::sleep;
 use tracing::{debug, error, instrument, warn};
 
 use super::PollerContext;
@@ -66,30 +65,31 @@ pub enum ScoreKind {
     Support,
 }
 
+const RECOVERABLE_MAX: i32 = 10;
+
 /// Consistently polls the current state of a player and records the changes.
 #[instrument(level = "debug", skip_all, fields(player = ?player, poller_id = ctx.id))]
 pub async fn poll_playerinfo(player: Player, mut ctx: PollerContext) {
     debug!("Starting player poller");
-    let PollerContext { config, rx, .. } = ctx;
     let player_name = player.name.clone();
-
+    let mut waiter = PollWaiter::new(ctx.config.clone());
+    let mut config = ctx.config();
     let connection = RconConnection::new(&config.rcon).await;
     if let Err(e) = connection {
         warn!("Failed to establish connection: {}", e);
         return;
     }
     let mut connection = connection.unwrap();
-
     let mut previous = None;
     let mut recoverable_count = 0;
-    const RECOVERABLE_MAX: i32 = 10;
 
     // Stop the loop if has_changed is false or has_changed is true
-    while rx.has_changed().map_or(false, |changed| !changed) {
-        sleep(config.polling.wait_ms).await;
+    while ctx.rx.has_changed().map_or(false, |changed| !changed) {
+        waiter.wait().await;
+        config = ctx.config();
 
         let fetch_playerinfo = connection.fetch_playerinfo(&player_name).await;
-        let current = fetch(&mut connection, fetch_playerinfo, &config).await;
+        let current = fetch(&mut connection, fetch_playerinfo, &config.rcon).await;
 
         if let Err((recoverable, e)) = current {
             if !recoverable {
