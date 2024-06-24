@@ -6,14 +6,14 @@ pub mod services;
 
 pub mod utils;
 
-use std::{error::Error, sync::Arc, time::Duration};
+use std::{error::Error, time::Duration};
 
 use clap::Parser;
 use config::{setup_config, AppConfig, CliConfig};
 
 use exporting::{queue::EventSender, setup_exporting};
 use services::*;
-use tokio::{sync::Mutex, time::sleep};
+use tokio::time::sleep;
 use tracing::{error, info, level_filters::LevelFilter};
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, Layer};
 
@@ -25,15 +25,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = load_config()?;
     info!("File config intialized... Testing connectivity to server");
 
-    let mut connection = test_connectivity(&config.borrow().rcon).await?;
+    test_connectivity(&config.borrow().rcon).await?;
     info!("Connection to server successfully tested... Starting wise");
 
     let tx = EventSender::new();
-
     setup_exporting(&config, &tx).await?;
-    let manager = PollingManager::new(config, tx);
-    let arc_manager = Arc::new(Mutex::new(manager));
-    PollingManager::resume_polling(arc_manager, &mut connection).await?;
+    let mut manager = PollingManager::new(config, tx);
+    manager.resume_polling().await?;
 
     loop {
         sleep(Duration::from_secs(1000)).await;
@@ -74,12 +72,12 @@ fn load_config() -> Result<AppConfig, Box<dyn Error>> {
 /// Test if connectivity to the server exists.
 async fn test_connectivity(
     credentials: &RconCredentials,
-) -> Result<RconConnection, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let connection = RconConnection::new(credentials).await;
     if let Err(e) = connection {
         error!("The test connection to the server failed: {e}");
         return Err(e.into());
     }
 
-    Ok(connection.unwrap())
+    Ok(())
 }

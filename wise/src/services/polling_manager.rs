@@ -1,10 +1,16 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 
-use rcon::{connection::RconConnection, parsing::Player, RconError};
+use rcon::parsing::Player;
 use tokio::{
     sync::{
         watch::{self, Sender},
-        Mutex, MutexGuard,
+        Mutex,
     },
     task::JoinHandle,
     time::sleep,
@@ -13,32 +19,37 @@ use tracing::{debug, warn};
 
 use crate::{
     config::AppConfig,
+    connection_pool::ConnectionPool,
     exporting::queue::EventSender,
     polling::{
         gamestate::poll_gamestate, playerinfo::poll_playerinfo, showlog::poll_showlog,
-        PollerContext,
+        PollingContext,
     },
 };
 
 /// Centrally manages all running pollers.
+#[derive(Debug, Clone)]
 pub struct PollingManager {
-    running_id: u64,
-    task_map: HashMap<u64, TaskEntry>,
-    player_map: HashMap<Player, u64>,
-    config: AppConfig,
-    sender: EventSender,
+    connection_pool: ConnectionPool,
+    running_id: Arc<AtomicU64>,
+    task_map: Arc<Mutex<HashMap<u64, TaskEntry>>>,
+    player_map: Arc<Mutex<HashMap<Player, u64>>>,
+    config: Arc<AppConfig>,
+    sender: Arc<EventSender>,
 }
 
+#[derive(Debug)]
 struct TaskEntry(#[allow(dead_code)] JoinHandle<()>, Sender<()>);
 
 impl PollingManager {
     pub fn new(config: AppConfig, sender: EventSender) -> Self {
         Self {
-            running_id: 0,
-            task_map: HashMap::new(),
-            player_map: HashMap::new(),
-            config,
-            sender,
+            connection_pool: ConnectionPool::new(config.clone()),
+            running_id: Arc::default(),
+            task_map: Arc::default(),
+            player_map: Arc::default(),
+            config: Arc::new(config),
+            sender: Arc::new(sender),
         }
     }
 
@@ -46,46 +57,43 @@ impl PollingManager {
     /// - ShowLog polling
     /// - GameState polling
     /// - polling all players returned in the in `Get PlayerIds` command
-    pub async fn resume_polling(
-        arc_manager: Arc<Mutex<PollingManager>>,
-        connection: &mut RconConnection,
-    ) -> Result<(), RconError> {
+    pub async fn resume_polling(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         debug!("Starting/Resuming global polling");
-        let players = connection.fetch_playerids().await?;
-        let mut manager = arc_manager.lock().await;
-        let cooldown = manager.config.borrow().polling.cooldown_ms;
+        let players = self
+            .connection_pool
+            .execute(|c| Box::pin(c.fetch_playerids()))
+            .await?;
 
+        let cooldown = self.config.borrow().polling.cooldown_ms;
         debug!("Starting polling for {} players", players.len());
         for player in players {
-            manager.start_playerinfo_poller(player);
+            self.start_playerinfo_poller(player).await;
             sleep(cooldown).await;
         }
 
-        PollingManager::start_showlog_poller(&mut manager, arc_manager.clone());
-        PollingManager::start_gamestate_poller(&mut manager);
+        self.start_showlog_poller().await;
+        self.start_gamestate_poller().await;
         Ok(())
     }
 
-    fn start_showlog_poller(
-        manager: &mut MutexGuard<PollingManager>,
-        arc_manager: Arc<Mutex<PollingManager>>,
-    ) {
-        let (ctx, tx) = manager.create_ctx();
+    async fn start_showlog_poller(&mut self) {
+        let (ctx, tx) = self.create_ctx();
         let ctx_id = ctx.id;
-        let handle = tokio::spawn(async move { poll_showlog(arc_manager, ctx).await });
-        manager.register_poller(ctx_id, tx, handle);
+        let self_clone = self.clone();
+        let handle = tokio::spawn(async move { poll_showlog(self_clone, ctx).await });
+        self.register_poller(ctx_id, tx, handle).await;
     }
 
-    fn start_gamestate_poller(manager: &mut MutexGuard<PollingManager>) {
-        let (ctx, tx) = manager.create_ctx();
+    async fn start_gamestate_poller(&mut self) {
+        let (ctx, tx) = self.create_ctx();
         let ctx_id = ctx.id;
         let handle = tokio::spawn(async move { poll_gamestate(ctx).await });
-        manager.register_poller(ctx_id, tx, handle);
+        self.register_poller(ctx_id, tx, handle).await;
     }
 
     /// Start polling a given player.
-    pub fn start_playerinfo_poller(&mut self, player: Player) {
-        if self.player_map.contains_key(&player) {
+    pub async fn start_playerinfo_poller(&mut self, player: Player) {
+        if self.player_map.lock().await.contains_key(&player) {
             return;
         }
 
@@ -94,13 +102,13 @@ impl PollingManager {
         let poller_player = player.clone();
         let handle = tokio::spawn(async move { poll_playerinfo(poller_player, ctx).await });
 
-        self.register_poller(ctx_id, tx, handle);
-        self.player_map.insert(player, ctx_id);
+        self.register_poller(ctx_id, tx, handle).await;
+        self.player_map.lock().await.insert(player, ctx_id);
     }
 
     /// Stop the polling for a certain task.
-    pub fn stop_playerinfo_poller(&mut self, player: Player) {
-        let Some(id) = self.player_map.remove(&player) else {
+    pub async fn stop_playerinfo_poller(&mut self, player: Player) {
+        let Some(id) = self.player_map.lock().await.remove(&player) else {
             warn!(
                 "Tried to stop polling for {:?} but they are not know",
                 player
@@ -108,34 +116,33 @@ impl PollingManager {
             return;
         };
 
-        self.kill_poller(id);
+        self.kill_poller(id).await;
     }
 
-    fn create_ctx(&mut self) -> (PollerContext, Sender<()>) {
+    fn create_ctx(&mut self) -> (PollingContext, Sender<()>) {
         let id = self.get_id();
         let (tx, rx) = watch::channel(());
         (
-            PollerContext::new(self.config.clone(), rx, id, self.sender.clone()),
+            PollingContext::new((*self.config).clone(), rx, id, (*self.sender).clone()),
             tx,
         )
     }
 
     /// Get a new unique id.
     fn get_id(&mut self) -> u64 {
-        self.running_id += 1;
-        self.running_id
+        self.running_id.fetch_add(1, Ordering::Acquire)
     }
 
     /// Register a task to be tracked.
-    fn register_poller(&mut self, id: u64, tx: Sender<()>, handle: JoinHandle<()>) {
+    async fn register_poller(&mut self, id: u64, tx: Sender<()>, handle: JoinHandle<()>) {
         let entry = TaskEntry(handle, tx);
-        self.task_map.insert(id, entry);
+        self.task_map.lock().await.insert(id, entry);
         debug!("Registered task #{}", id);
     }
 
     /// Kill a task and remove it from tracking.
-    fn kill_poller(&mut self, id: u64) {
-        let Some(v) = self.task_map.remove(&id) else {
+    async fn kill_poller(&mut self, id: u64) {
+        let Some(v) = self.task_map.lock().await.remove(&id) else {
             return;
         };
 

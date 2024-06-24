@@ -11,14 +11,14 @@ pub mod showlog;
 mod utils;
 
 #[derive(Debug)]
-pub struct PollerContext {
+pub struct PollingContext {
     pub id: u64,
     pub config: AppConfig,
     pub rx: Receiver<()>,
     pub tx: EventSender,
 }
 
-impl PollerContext {
+impl PollingContext {
     pub fn new(config: AppConfig, rx: Receiver<()>, id: u64, broadcaster: EventSender) -> Self {
         return Self {
             config,

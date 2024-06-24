@@ -1,21 +1,18 @@
-use std::sync::Arc;
-
 use rcon::{
     connection::RconConnection,
     parsing::showlog::{LogKind, LogLine},
 };
-use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, error, instrument, warn};
 
 use crate::{event::RconEvent, polling_manager::PollingManager};
 
 use super::{
     utils::{fetch, PollWaiter},
-    PollerContext,
+    PollingContext,
 };
 
 #[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
-pub async fn poll_showlog(manager: Arc<Mutex<PollingManager>>, mut ctx: PollerContext) {
+pub async fn poll_showlog(mut manager: PollingManager, mut ctx: PollingContext) {
     // TODO: use the rx
     let mut waiter = PollWaiter::new(ctx.config.clone());
     let mut config = ctx.config();
@@ -44,10 +41,9 @@ pub async fn poll_showlog(manager: Arc<Mutex<PollingManager>>, mut ctx: PollerCo
         }
         let new_logs = new_logs.unwrap();
         let untracked_logs = merge_logs(&mut known_logs, new_logs);
-        let mut guard = manager.lock().await;
-        untracked_logs
-            .iter()
-            .for_each(|l| handle_untracked_log(l, &mut guard, &mut ctx));
+        for log in untracked_logs {
+            handle_untracked_log(&log, &mut manager, &mut ctx).await;
+        }
     }
 }
 
@@ -62,21 +58,21 @@ fn merge_logs(old_logs: &mut Vec<LogLine>, new_logs: Vec<LogLine>) -> Vec<LogLin
     untracked_logs
 }
 
-fn handle_untracked_log(
+async fn handle_untracked_log(
     log_line: &LogLine,
-    manager: &mut MutexGuard<PollingManager>,
-    ctx: &mut PollerContext,
+    manager: &mut PollingManager,
+    ctx: &mut PollingContext,
 ) {
     ctx.tx.send_rcon(RconEvent::Log(log_line.clone()));
     match &log_line.kind {
         LogKind::Connect { player, connect } => match connect {
             true => {
                 debug!("Detected player {:?} connecting", player);
-                manager.start_playerinfo_poller(player.clone());
+                manager.start_playerinfo_poller(player.clone()).await;
             }
             false => {
                 debug!("Detected layer {:?} disconnecting", player);
-                manager.stop_playerinfo_poller(player.clone());
+                manager.stop_playerinfo_poller(player.clone()).await;
             }
         },
         LogKind::TeamSwitch {

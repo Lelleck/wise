@@ -6,7 +6,7 @@ use crate::event::RconEvent;
 
 use super::{
     utils::{detect, fetch, PollWaiter},
-    PollerContext,
+    PollingContext,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -20,7 +20,7 @@ pub enum GameStateChanges {
 }
 
 #[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
-pub async fn poll_gamestate(mut ctx: PollerContext) {
+pub async fn poll_gamestate(mut ctx: PollingContext) {
     let mut waiter = PollWaiter::new(ctx.config.clone());
     let mut config = ctx.config();
     let connection = RconConnection::new(&config.rcon).await;

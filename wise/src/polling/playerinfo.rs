@@ -10,7 +10,7 @@ use rcon::{
 use serde::Serialize;
 use tracing::{debug, error, instrument, warn};
 
-use super::PollerContext;
+use super::PollingContext;
 
 // TODO: maybe we can make this generic?
 #[derive(Debug, Clone, Serialize)]
@@ -69,7 +69,7 @@ const RECOVERABLE_MAX: i32 = 10;
 
 /// Consistently polls the current state of a player and records the changes.
 #[instrument(level = "debug", skip_all, fields(player = ?player, poller_id = ctx.id))]
-pub async fn poll_playerinfo(player: Player, mut ctx: PollerContext) {
+pub async fn poll_playerinfo(player: Player, mut ctx: PollingContext) {
     debug!("Starting player poller");
     let player_name = player.name.clone();
     let mut waiter = PollWaiter::new(ctx.config.clone());
