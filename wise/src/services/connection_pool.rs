@@ -56,7 +56,7 @@ impl ConnectionPool {
     /// fault is so critical that the caller should stop themselves.
     ///
     /// Any function call has [`MAX_RETRIES`] attempts to execute its function.
-    /// Should this limit be exceeded an [`Err`].
+    /// Should this limit be exceeded an [`Err`] is returned.
     pub async fn execute<F, R>(&mut self, f: F) -> Result<R, PoolError>
     where
         R: Debug,

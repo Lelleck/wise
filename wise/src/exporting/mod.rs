@@ -10,7 +10,7 @@ pub async fn setup_exporting(
     tx: &EventSender,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if config.borrow().exporting.websocket.enabled {
-        let task = websocket::build_websocket(tx.clone(), config.clone()).await?;
+        let task = websocket::build_websocket_exporter(tx.clone(), config.clone()).await?;
         _ = tokio::spawn(async move {
             _ = task.await;
         });
