@@ -53,6 +53,10 @@ impl PollingManager {
         }
     }
 
+    pub fn pool(&self) -> ConnectionPool {
+        self.connection_pool.clone()
+    }
+
     /// Start polling and load. This starts:
     /// - ShowLog polling
     /// - GameState polling
@@ -123,7 +127,13 @@ impl PollingManager {
         let id = self.get_id();
         let (tx, rx) = watch::channel(());
         (
-            PollingContext::new((*self.config).clone(), rx, id, (*self.sender).clone(), self.connection_pool.clone()),
+            PollingContext::new(
+                (*self.config).clone(),
+                rx,
+                id,
+                (*self.sender).clone(),
+                self.connection_pool.clone(),
+            ),
             tx,
         )
     }

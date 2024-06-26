@@ -29,9 +29,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("Connection to server successfully tested... Starting wise");
 
     let tx = EventSender::new();
-    setup_exporting(&config, &tx).await?;
-    let mut manager = PollingManager::new(config, tx);
+    let mut manager = PollingManager::new(config.clone(), tx.clone());
     manager.resume_polling().await?;
+
+    setup_exporting(&config, &tx, manager.pool()).await?;
 
     loop {
         sleep(Duration::from_secs(1000)).await;

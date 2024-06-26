@@ -7,13 +7,15 @@ use tracing::debug;
 
 use crate::{
     config::{AppConfig, WebSocketConfig},
-    exporting::{queue::EventSender, websocket::handling::run_websocket},
+    connection_pool::ConnectionPool,
+    exporting::{queue::EventSender, websocket::handling::run_websocket_server},
 };
 
 /// Build the task that listens for incoming websocket connections.
 pub async fn build_websocket_exporter(
     tx: EventSender,
     config: AppConfig,
+    pool: ConnectionPool,
 ) -> Result<impl Future<Output = Result<(), Box<dyn Error>>>, Box<dyn Error>> {
     debug!("Initializing exporting over websockets");
     let ws_config = &config.borrow().exporting.websocket;
@@ -25,7 +27,13 @@ pub async fn build_websocket_exporter(
     };
     let listener = TcpListener::bind(&ws_config.address).await?;
 
-    Ok(run_websocket(tx, listener, acceptor, config.clone()))
+    Ok(run_websocket_server(
+        tx,
+        listener,
+        acceptor,
+        config.clone(),
+        pool,
+    ))
 }
 
 /// Build the [`TlsAcceptor`] for the websocket.

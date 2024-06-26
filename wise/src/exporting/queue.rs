@@ -1,12 +1,14 @@
 use tokio::sync::{broadcast::Receiver, broadcast::Sender};
 
-use crate::event::{RconEvent, WiseEvent};
+use crate::event::RconEvent;
+
+use super::websocket::ServerWsMessage;
 
 const EVENT_QUEUE_CAPACITY: usize = 1000;
 
 #[derive(Debug, Clone)]
 pub struct EventSender {
-    tx: Sender<WiseEvent>,
+    tx: Sender<ServerWsMessage>,
 }
 
 impl EventSender {
@@ -21,21 +23,21 @@ impl EventSender {
     }
 
     pub fn send_rcon(&mut self, event: RconEvent) {
-        _ = self.tx.send(WiseEvent::Rcon(event));
+        _ = self.tx.send(ServerWsMessage::Rcon(event));
     }
 }
 
 #[derive(Debug)]
 pub struct EventReceiver {
-    rx: Receiver<WiseEvent>,
+    rx: Receiver<ServerWsMessage>,
 }
 
 impl EventReceiver {
-    pub fn new(rx: Receiver<WiseEvent>) -> Self {
+    pub fn new(rx: Receiver<ServerWsMessage>) -> Self {
         Self { rx }
     }
 
-    pub async fn receive(&mut self) -> WiseEvent {
+    pub async fn receive(&mut self) -> ServerWsMessage {
         // TODO: make this redudant
         self.rx.recv().await.unwrap()
     }

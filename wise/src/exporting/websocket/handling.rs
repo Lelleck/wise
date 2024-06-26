@@ -1,6 +1,6 @@
 use std::{error::Error, time::Duration};
 
-use futures::{SinkExt, StreamExt};
+use futures::{future, pin_mut, SinkExt, StreamExt, TryStreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
@@ -8,19 +8,22 @@ use tokio::{
 };
 use tokio_rustls::TlsAcceptor;
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
-use tracing::{error, info};
+use tracing::{debug, error, field::debug, info, warn};
 
 use super::error::*;
-use crate::config::AppConfig;
+use crate::{
+    config::AppConfig, connection_pool::ConnectionPool, exporting::websocket::ClientWsMessage,
+};
 
 use crate::exporting::queue::*;
 
 /// Runs the websocket server as a background task.
-pub async fn run_websocket(
+pub async fn run_websocket_server(
     tx: EventSender,
     listener: TcpListener,
     acceptor: Option<TlsAcceptor>,
     ws_config: AppConfig,
+    pool: ConnectionPool,
 ) -> Result<(), Box<dyn Error>> {
     if acceptor.is_some() {
         info!(
@@ -38,8 +41,9 @@ pub async fn run_websocket(
         _ = tokio::spawn(accept_connection(
             stream,
             acceptor.clone(),
-            tx.receiver(),
+            tx.clone(),
             ws_config.clone(),
+            pool.clone(),
         ));
     }
 
@@ -52,8 +56,9 @@ trait AsyncConnection: AsyncRead + AsyncWrite + Unpin {}
 async fn accept_connection(
     stream: TcpStream,
     acceptor: Option<TlsAcceptor>,
-    event_rx: EventReceiver,
+    event_tx: EventSender,
     config: AppConfig,
+    pool: ConnectionPool,
 ) {
     let peer = stream.peer_addr().expect("Peer address could not be read");
     let res = if acceptor.is_some() {
@@ -62,15 +67,16 @@ async fn accept_connection(
         let ws_stream = tokio_tungstenite::accept_async(tls_stream)
             .await
             .expect("WebSocket handshake failed");
-        handle_connection(config, ws_stream, event_rx).await
+        handle_connection(config, ws_stream, event_tx, pool).await
     } else {
         info!("Accepted websocket connection from {}", peer);
         let ws_stream = tokio_tungstenite::accept_async(stream)
             .await
             .expect("WebSocket handshake failed");
-        handle_connection(config, ws_stream, event_rx).await
+        handle_connection(config, ws_stream, event_tx, pool).await
     };
 
+    /*
     if res.is_ok() {
         return;
     }
@@ -80,45 +86,75 @@ async fn accept_connection(
         peer,
         res.unwrap_err()
     );
+    */
 }
 
 /// Handle a single websocket connection.
 async fn handle_connection<T>(
     config: AppConfig,
     ws_stream: WebSocketStream<T>,
-    mut rx: EventReceiver,
-) -> Result<(), Box<dyn Error>>
-where
+    tx: EventSender,
+    mut pool: ConnectionPool,
+) where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    let (mut write, mut read) = ws_stream.split();
-    let password = config.borrow().exporting.websocket.password.clone();
+    let (write, read) = ws_stream.split();
+    pin_mut!(write);
 
-    if password.is_some() {
-        let password = password.as_ref().unwrap();
-        // TODO: move this into its own function
-        let received = timeout(Duration::from_secs(5), read.next())
-            .await
-            .map_err(|_| WebSocketError::PasswordTimeout)?;
-        let message = received.ok_or(WebSocketError::InvalidPassword(None))??;
-        if !message.is_text() {
-            Err(WebSocketError::InvalidPassword(None))?
+    // TODO: add password
+
+    let receive_incoming = read.try_for_each(|msg| {
+        debug!("Received message {}", msg);
+
+        if !msg.is_text() {
+            return future::ok(());
         }
 
-        let provided_password = message.to_text()?;
-        if provided_password != password {
-            Err(WebSocketError::InvalidPassword(Some(
-                provided_password.to_string(),
-            )))?;
+        let client_message = serde_json::from_str::<ClientWsMessage>(msg.to_text().unwrap());
+        if client_message.is_err() {
+            warn!("Failed to parse client provided message");
+            return future::ok(());
         }
+        let client_message = client_message.unwrap();
 
-        info!("Client provided correct password");
-    }
+        _ = tokio::spawn(handle_client_message(
+            tx.clone(),
+            client_message,
+            pool.clone(),
+        ));
+
+        future::ok(())
+    });
+
+    receive_incoming.await;
+
+    let mut rx = tx.receiver();
 
     loop {
         let event = rx.receive().await;
-        let value = serde_json::to_string(&event).unwrap();
-        // TODO: this might be limiting
-        write.send(Message::text(value)).await?;
+        let json = serde_json::to_string(&event).unwrap();
+        write.send(Message::Text(json)).await.unwrap();
     }
+}
+
+async fn handle_server_message(mut rx: EventReceiver) {
+    loop {}
+}
+
+async fn handle_client_message(
+    tx: EventSender,
+    message: ClientWsMessage,
+    mut pool: ConnectionPool,
+) {
+    let ClientWsMessage::Execute {
+        id,
+        command,
+        long_response,
+    } = message;
+
+    let res = pool
+        .execute(|conn| Box::pin(conn.execute(long_response, command.clone())))
+        .await;
+
+    debug!("Executed command {}", res.unwrap());
 }

@@ -23,10 +23,3 @@ pub enum RconEvent {
         new_state: GameState,
     },
 }
-
-/// All possible messages emitted over the websocket. Currently this
-/// exclusively holds [`RconEvent`] as wise currently emits nothing else.
-#[derive(Debug, Clone, Serialize)]
-pub enum WiseEvent {
-    Rcon(RconEvent),
-}
