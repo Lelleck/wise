@@ -63,7 +63,7 @@ pub enum LogKind {
 ///
 /// # Parses
 /// `[44.7 sec (1718212472)] `
-fn parse_prelude(input: &str) -> IResult<&str, u64> {
+fn take_prelude(input: &str) -> IResult<&str, u64> {
     let (input, timestamp) = delimited(
         char('['),
         tuple((take_until("("), char('('), take_u64, char(')'))),
@@ -78,7 +78,7 @@ fn parse_prelude(input: &str) -> IResult<&str, u64> {
 /// # Parses
 /// `CONNECTED PlayerName (11111111111111111)`
 /// `DISCONNECTED PlayerName (11111111111111111)`
-fn parse_connect(input: &str) -> IResult<&str, LogKind> {
+fn take_connect(input: &str) -> IResult<&str, LogKind> {
     let (input, connect) = alt((tag("CONNECTED"), tag("DISCONNECTED")))(input)?;
     let connect = connect == "CONNECTED";
 
@@ -105,7 +105,7 @@ fn parse_connect(input: &str) -> IResult<&str, LogKind> {
 /// # Parses
 /// `KILL: Player Name(Allies/11111111111111111) -> PlayerName(Axis/11111111111111111) with M1903 SPRINGFIELD`
 /// `TEAM KILL: Player Name(Axis/11111111-aaaa-1111-aaaa-111111111111) -> PlayerName(Axis/11111111111111111) with Opel Blitz (Transport)`
-fn parse_kill(input: &str) -> IResult<&str, LogKind> {
+fn take_kill(input: &str) -> IResult<&str, LogKind> {
     let (input, kill_type) = alt((tag("KILL: "), tag("TEAM KILL: ")))(input)?;
     let is_teamkill = kill_type == "TEAM KILL: ";
 
@@ -124,9 +124,9 @@ fn parse_kill(input: &str) -> IResult<&str, LogKind> {
     let (killer_arrow_victim, with_weapon) = killer_arrow_victim_with_weapon.split_at(with_idx);
     let (weapon, _) = tag(" with ")(with_weapon)?;
 
-    let (arrow_victim, (killer_faction, killer)) = parse_faction_player(killer_arrow_victim)?;
+    let (arrow_victim, (killer_faction, killer)) = take_faction_and_player(killer_arrow_victim)?;
     let (only_victim, _arrow) = tag(" -> ")(arrow_victim)?;
-    let (_, (victim_faction, victim)) = parse_faction_player(only_victim)?;
+    let (_, (victim_faction, victim)) = take_faction_and_player(only_victim)?;
 
     let kind = LogKind::Kill {
         killer,
@@ -145,7 +145,7 @@ fn parse_kill(input: &str) -> IResult<&str, LogKind> {
 /// # Parses
 /// `Player Name(Allies/11111111111111111)`
 /// `Player Name(Axis/11111111-aaaa-1111-aaaa-111111111111)`
-fn parse_faction_player(input: &str) -> IResult<&str, (String, Player)> {
+fn take_faction_and_player(input: &str) -> IResult<&str, (String, Player)> {
     // Watch out and handle UTF-8 correctly.
     if input.chars().count() < 27 {
         return Err(Err::Failure(Error::new(input, ErrorKind::Eof)));
@@ -155,7 +155,7 @@ fn parse_faction_player(input: &str) -> IResult<&str, (String, Player)> {
     while end < 20 {
         let (idx, _) = input.char_indices().nth(end).unwrap();
         let (name, faction_id) = input.split_at(idx);
-        let reco = recognize(parse_faction_id)(faction_id);
+        let reco = recognize(take_faction_and_id)(faction_id);
 
         if reco.is_err() {
             end += 1;
@@ -163,7 +163,7 @@ fn parse_faction_player(input: &str) -> IResult<&str, (String, Player)> {
         }
 
         let (input, faction_id) = reco.unwrap();
-        let (_, (faction, id)) = parse_faction_id(faction_id)?;
+        let (_, (faction, id)) = take_faction_and_id(faction_id)?;
         return Ok((input, (faction, Player::new(name.to_string(), id))));
     }
 
@@ -175,7 +175,7 @@ fn parse_faction_player(input: &str) -> IResult<&str, (String, Player)> {
 /// # Parses
 /// `(Allies/11111111111111111)`
 /// `(Axis/11111111-aaaa-1111-aaaa-111111111111)`
-fn parse_faction_id(original_input: &str) -> IResult<&str, (String, PlayerId)> {
+fn take_faction_and_id(original_input: &str) -> IResult<&str, (String, PlayerId)> {
     let (input, (faction, player_id)) = delimited(
         char('('),
         separated_pair(take_while1(|c| c != '/'), char('/'), take_until(")")),
@@ -192,9 +192,32 @@ fn parse_faction_id(original_input: &str) -> IResult<&str, (String, PlayerId)> {
     Ok((input, (faction.to_string(), player_id)))
 }
 
+/// Parse a chat message.
+///
+/// # Parses
+/// `CHAT[Team][Player(Allies/11111111111111111)]: foo bar`
+fn take_chat(input: &str) -> IResult<&str, LogKind> {
+    let (input, _) = tag("CHAT")(input)?;
+    let (input, reach) = delimited(char('['), take_while1(|c| c != ']'), char(']'))(input)?;
+    let (input, _) = tag("[")(input)?;
+    let (input, (team, sender)) = take_faction_and_player(input)?;
+    let (input, _) = tag("]: ")(input)?;
+    let (input, content) = take_until("\n")(input)?;
+
+    Ok((
+        input,
+        LogKind::Chat {
+            sender,
+            team,
+            reach: reach.to_string(),
+            content: content.to_string(),
+        },
+    ))
+}
+
 /// Parse an entire log line if possible otherwise skip until the next "\n".
-fn parse_logline(input: &str) -> IResult<&str, Option<LogLine>> {
-    let res = parse_prelude(input);
+fn take_logline(input: &str) -> IResult<&str, Option<LogLine>> {
+    let res = take_prelude(input);
 
     // If parsing the prelude fails skip this line, such as the case with multi-line messages
     if let Err(_) = res {
@@ -204,7 +227,7 @@ fn parse_logline(input: &str) -> IResult<&str, Option<LogLine>> {
     let (input, timestamp) = res.unwrap();
 
     // If we fail to parse the log line skip it
-    let Ok((input, kind)) = alt((parse_connect, parse_kill))(input) else {
+    let Ok((input, kind)) = alt((take_connect, take_kill, take_chat))(input) else {
         let (input, _) = tuple((take_until("\n"), tag("\n")))(input)?;
         return Ok((input, None));
     };
@@ -213,7 +236,7 @@ fn parse_logline(input: &str) -> IResult<&str, Option<LogLine>> {
 }
 
 pub fn parse_loglines(input: &str) -> Result<Vec<LogLine>, RconError> {
-    Ok(many0(parse_logline)(input).map(|o| {
+    Ok(many0(take_logline)(input).map(|o| {
         o.1.into_iter()
             .filter(|p| p.is_some())
             .map(|p| p.unwrap())
