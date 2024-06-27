@@ -9,7 +9,7 @@ use clap::{ArgAction, Parser};
 use config::{Config, ConfigError, File};
 use notify::{EventKind, Watcher};
 use rcon::connection::RconCredentials;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use tokio::sync::{
     mpsc::channel,
@@ -40,6 +40,26 @@ pub struct PollingConfig {
 
     #[serde_as(as = "serde_with::DurationMilliSeconds<u64>")]
     pub cooldown_ms: Duration,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuthConfig {
+    pub tokens: Vec<AuthToken>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuthToken {
+    pub name: String,
+    pub value: String,
+    pub perms: AuthPerms,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthPerms {
+    pub read_rcon_events: bool,
+
+    #[serde(default)]
+    pub write_rcon: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -87,6 +107,9 @@ pub struct FileConfig {
 
     /// Configuration for polling the HLL server.
     pub polling: PollingConfig,
+
+    /// Configuration for authentication and authorization.
+    pub auth: AuthConfig,
 
     /// Configuration for different modes of exporting.
     pub exporting: ExportingConfig,

@@ -2,6 +2,7 @@ use queue::EventSender;
 
 use crate::{config::AppConfig, connection_pool::ConnectionPool};
 
+pub mod auth;
 pub mod queue;
 pub mod websocket;
 

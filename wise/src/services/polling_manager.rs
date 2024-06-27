@@ -62,6 +62,7 @@ impl PollingManager {
     /// - GameState polling
     /// - polling all players returned in the in `Get PlayerIds` command
     pub async fn resume_polling(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        return Ok(());
         debug!("Starting/Resuming global polling");
         let players = self
             .connection_pool

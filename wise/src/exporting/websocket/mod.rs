@@ -1,6 +1,5 @@
-mod authentication;
+mod auth;
 mod build;
-mod error;
 mod handling;
 mod messages;
 

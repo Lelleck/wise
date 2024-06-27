@@ -10,7 +10,6 @@ wait_ms = 1000 # Milliseconds to wait between pollings
 cooldown_ms = 1000 # Milliseconds before opening another connection to the server
 
 [exporting]
-    
 [exporting.websocket]
 enabled = true # Enable or disable the websocket
 address = "localhost:25052" # The address to which the websocket should bind to

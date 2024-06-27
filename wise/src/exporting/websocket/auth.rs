@@ -6,12 +6,10 @@ use tokio::time::timeout;
 use tokio_tungstenite::WebSocketStream;
 use tracing::info;
 
-use super::error::WebSocketError;
-
 pub async fn authenticate_with_password<T>(
     password: &str,
     stream: &mut SplitStream<WebSocketStream<T>>,
-) -> Result<(), WebSocketError>
+) -> Result<(), ()>
 where
     T: AsyncRead + StreamExt + Unpin,
 {
