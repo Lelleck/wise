@@ -35,6 +35,8 @@ impl CliConfig {}
 #[serde_with::serde_as]
 #[derive(Debug, Clone, Deserialize)]
 pub struct PollingConfig {
+    pub enabled: bool,
+
     #[serde_as(as = "serde_with::DurationMilliSeconds<u64>")]
     pub wait_ms: Duration,
 
@@ -54,7 +56,7 @@ pub struct AuthToken {
     pub perms: AuthPerms,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct AuthPerms {
     pub read_rcon_events: bool,
 

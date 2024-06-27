@@ -14,6 +14,16 @@ pub struct AuthHandle {
     pub perms: AuthPerms,
 }
 
+impl AuthHandle {
+    pub fn default_no_perms() -> Self {
+        AuthHandle {
+            granted_at: Instant::now(),
+            name: "default-token".to_string(),
+            perms: AuthPerms::default(),
+        }
+    }
+}
+
 pub fn authenticate_token(provided_token: &str, config: &AppConfig) -> Result<AuthHandle, ()> {
     let cnf = config.borrow();
     let matched_token = cnf

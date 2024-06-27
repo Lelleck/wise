@@ -9,12 +9,38 @@ password = "" # The password used to login
 wait_ms = 1000 # Milliseconds to wait between pollings
 cooldown_ms = 1000 # Milliseconds before opening another connection to the server
 
+[auth]
+[[auth.tokens]]
+name = "events-script" # A custom name for the token emitted in logs, should be descriptive and unique
+value = "" # The token passed by requesting applications
+perms.write_rcon = false
+perms.read_rcon_events = true
+
+# Unsupport at the moment
+#[auth.tokens.perms.read]
+#rcon_events = false # Whether they are allowed to read events emitted by RCON
+
+#[auth.tokens.perms.write]
+# !! A very powerful permission !!
+# Allows direct communication with the HLL server, use with caution
+#rcon_raw.allow = true
+# This will only allow the direct execution of commands starting with any 
+# of the phrases in the given list. Comment out to allow all communications.
+#rcon_raw.allowed_commands = ["Punish"]
+
+# Whether the holder is allowed to execute commands that are "natively"
+# supported by wise, such as "PlayerInfo <Player>".
+#rcon_parsed.allow = true
+
+# Which commands the holder is able to execute, a full list can be found 
+# in the CommandKind list. [`CommandKind::Raw`] is ignored in this list.
+#rcon_parsed.allowed_commands = ["GetPlayerIds"]
+
 [exporting]
 [exporting.websocket]
 enabled = true # Enable or disable the websocket
-address = "localhost:25052" # The address to which the websocket should bind to
-# password = "" # A unique token used by requesting applications to authenticate themselves
+address = "localhost:25053" # The address to which the websocket should bind to
 
 tls = false # Enable or disable TLS
-# cert_file = "" # Path to the certificate, only needs to be set if tls is enabled 
-# key_file = "" # Path to the key file, only needs ot be set if tls is enabled
+#cert_file = "" # Path to the certificate, only needs to be set if tls is enabled 
+#key_file = "" # Path to the key file, only needs ot be set if tls is enabled

@@ -1,8 +1,4 @@
-use std::{
-    error::Error,
-    net::{Ipv4Addr, SocketAddr},
-    time::Duration,
-};
+use std::{error::Error, net::SocketAddr, time::Duration};
 
 use futures::{SinkExt, StreamExt};
 use tokio::{
@@ -12,25 +8,36 @@ use tokio::{
 };
 use tokio_rustls::TlsAcceptor;
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
-use tracing::{debug, error, info, instrument, trace, warn, Level};
+use tracing::{debug, error, info, info_span, instrument, trace, warn};
 
 use crate::{
     config::AppConfig,
     connection_pool::ConnectionPool,
     exporting::{
-        auth::{self, authenticate_token, AuthHandle},
+        auth::{authenticate_token, AuthHandle},
         websocket::{ClientWsMessage, ServerResponse, ServerWsMessage},
     },
 };
 
 use crate::exporting::queue::*;
 
+use super::CommandKind;
+
+#[derive(Debug, Clone)]
+struct WsContext {
+    peer: SocketAddr,
+    config: AppConfig,
+    auth: AuthHandle,
+    event_tx: EventSender,
+    pool: ConnectionPool,
+}
+
 /// Runs the websocket server as a background task.
 pub async fn run_websocket_server(
-    tx: EventSender,
+    event_tx: EventSender,
     listener: TcpListener,
     acceptor: Option<TlsAcceptor>,
-    ws_config: AppConfig,
+    config: AppConfig,
     pool: ConnectionPool,
 ) -> Result<(), Box<dyn Error>> {
     if acceptor.is_some() {
@@ -46,14 +53,15 @@ pub async fn run_websocket_server(
     }
 
     while let Ok((stream, peer)) = listener.accept().await {
-        _ = tokio::spawn(accept_connection(
+        let ctx = WsContext {
             peer,
-            stream,
-            acceptor.clone(),
-            tx.clone(),
-            ws_config.clone(),
-            pool.clone(),
-        ));
+            config: config.clone(),
+            auth: AuthHandle::default_no_perms(),
+            event_tx: event_tx.clone(),
+            pool: pool.clone(),
+        };
+
+        _ = tokio::spawn(accept_connection(stream, acceptor.clone(), ctx));
     }
 
     info!("WebSocket server stopped");
@@ -61,15 +69,8 @@ pub async fn run_websocket_server(
 }
 
 /// Accept a connection
-#[instrument(level = Level::INFO, skip_all, fields(?peer))]
-async fn accept_connection(
-    peer: SocketAddr,
-    stream: TcpStream,
-    acceptor: Option<TlsAcceptor>,
-    event_tx: EventSender,
-    config: AppConfig,
-    pool: ConnectionPool,
-) {
+#[instrument(skip_all, fields(peer = ?ctx.peer))]
+async fn accept_connection(stream: TcpStream, acceptor: Option<TlsAcceptor>, ctx: WsContext) {
     if acceptor.is_some() {
         let tls_stream = acceptor.unwrap().accept(stream).await.unwrap();
         let ws_stream = tokio_tungstenite::accept_async(tls_stream)
@@ -77,76 +78,50 @@ async fn accept_connection(
             .expect("WebSocket handshake failed");
 
         debug!("Accepted TLS websocket connection");
-        handle_connection(peer, config, ws_stream, event_tx, pool).await;
+        handle_connection(ws_stream, ctx).await;
     } else {
         let ws_stream = tokio_tungstenite::accept_async(stream)
             .await
             .expect("WebSocket handshake failed");
 
         debug!("Accepted websocket connection");
-        handle_connection(peer, config, ws_stream, event_tx, pool).await;
+        handle_connection(ws_stream, ctx).await;
     };
 
     info!("WebSocket connection closed");
 }
 
 /// Handle a single websocket connection.
-#[instrument(level = Level::INFO, skip_all, fields(?peer))]
-async fn handle_connection<T>(
-    peer: SocketAddr,
-    config: AppConfig,
-    mut ws_stream: WebSocketStream<T>,
-    tx: EventSender,
-    pool: ConnectionPool,
-) where
+async fn handle_connection<T>(mut ws_stream: WebSocketStream<T>, mut ctx: WsContext)
+where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    let mut rx = tx.receiver();
+    let mut event_rx = ctx.event_tx.receiver();
 
-    let auth_handle = handle_token(peer, &config, &mut ws_stream).await;
+    let auth_handle = handle_token(&mut ws_stream, &mut ctx).await;
     if auth_handle.is_err() {
         error!("Authentication failed... Enable debug logging to see reasons");
         return;
     }
-    let auth_handle = auth_handle.unwrap();
 
-    let json = serde_json::to_string(&ServerWsMessage::AuthStatus(auth_handle.clone())).unwrap();
+    let span = info_span!("token_span", token = ?ctx.auth.name);
+    let _enter = span.enter();
+
+    let json = serde_json::to_string(&ServerWsMessage::AuthStatus(ctx.auth.clone())).unwrap();
     _ = ws_stream.send(Message::text(json)).await;
 
     info!("WebSocket connection full ready");
     loop {
         tokio::select! {
-            msg = ws_stream.next() => {
-                let Some(Ok(msg)) = msg else {
+            message = ws_stream.next() => {
+                let Some(Ok(message)) = message else {
                     return;
                 };
-
-                let s = serde_json::to_string(&ClientWsMessage::Execute { id: 1.to_string(), command: "Help".to_string(), long_response: false});
-                trace!("{}", s.unwrap());
-
-                trace!("Received message from client {}", msg);
-                if !msg.is_text() {
-                    continue;
-                }
-
-                let client_message = serde_json::from_str::<ClientWsMessage>(msg.to_text().unwrap());
-                if client_message.is_err() {
-                    warn!("Failed to parse client provided message");
-                    continue;
-                }
-                let client_message = client_message.unwrap();
-
-                _ = tokio::spawn(handle_client_message(
-                    auth_handle.clone(),
-                    peer,
-                    tx.clone(),
-                    client_message,
-                    pool.clone(),
-                ));
+                accept_client_message(message, &ctx);
             },
 
-            event = rx.receive() => {
-                if matches!(event, ServerWsMessage::Rcon(_)) && !auth_handle.perms.read_rcon_events {
+            event = event_rx.receive() => {
+                if matches!(event, ServerWsMessage::Rcon(_)) && !ctx.auth.perms.read_rcon_events {
                     continue;
                 }
 
@@ -160,12 +135,7 @@ async fn handle_connection<T>(
     }
 }
 
-#[instrument(level = Level::INFO, skip_all, fields(?peer))]
-async fn handle_token<T>(
-    peer: SocketAddr,
-    config: &AppConfig,
-    stream: &mut WebSocketStream<T>,
-) -> Result<AuthHandle, ()>
+async fn handle_token<T>(stream: &mut WebSocketStream<T>, ctx: &mut WsContext) -> Result<(), ()>
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
@@ -187,50 +157,85 @@ where
     }
 
     let provided_token = message.to_text().expect("Failed to unwrap text message");
-    authenticate_token(provided_token, config)
+    let auth = authenticate_token(provided_token, &ctx.config)?;
+    ctx.auth = auth;
+    Ok(())
 }
 
-#[instrument(level = Level::DEBUG, skip_all, fields(peer = ?peer))]
-async fn handle_client_message(
-    handle: AuthHandle,
-    peer: SocketAddr,
-    mut tx: EventSender,
-    message: ClientWsMessage,
-    mut pool: ConnectionPool,
-) {
-    if !handle.perms.write_rcon {
+fn accept_client_message(message: Message, ctx: &WsContext) {
+    trace!("Received message from client {}", message);
+    if !message.is_text() {
+        return;
+    }
+    let json = message
+        .to_text()
+        .expect("Failed to unpack text message as text");
+
+    let client_message = match serde_json::from_str::<ClientWsMessage>(json) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!("Failed to parse client provided message: {}", e);
+            return;
+        }
+    };
+
+    _ = tokio::spawn(handle_client_message(client_message, ctx.clone()));
+}
+
+async fn handle_client_message(message: ClientWsMessage, mut ctx: WsContext) {
+    if !ctx.auth.perms.write_rcon {
         warn!("Client is not allowed to execute commands");
-        // TODO: emit an error here
+        // TODO: emit an error here on the websocket
         return;
     }
 
-    let ClientWsMessage::Execute {
-        id,
-        command,
-        long_response,
-    } = message;
-
-    debug!("Executing RCON command for WebSocket client");
-    let res = pool
-        .execute(|conn| Box::pin(conn.execute(long_response, command.clone())))
-        .await;
+    let ClientWsMessage::Execute { id, kind } = message;
+    // TODO: make it generic and remove these unwraps
+    let value = match kind {
+        CommandKind::Raw {
+            command,
+            long_response,
+        } => serde_json::to_value(
+            ctx.pool
+                .execute(|c| Box::pin(c.execute(long_response, command.clone())))
+                .await
+                .unwrap(),
+        ),
+        CommandKind::GetGameState => serde_json::to_value(
+            ctx.pool
+                .execute(|c| Box::pin(c.fetch_gamestate()))
+                .await
+                .unwrap(),
+        ),
+        CommandKind::GetPlayerIds => serde_json::to_value(
+            ctx.pool
+                .execute(|c| Box::pin(c.fetch_playerids()))
+                .await
+                .unwrap(),
+        ),
+        CommandKind::GetPlayerInfo(player) => serde_json::to_value(
+            ctx.pool
+                .execute(|c| Box::pin(c.fetch_playerinfo(player.clone())))
+                .await
+                .unwrap(),
+        ),
+    };
 
     // TODO: currently all requests are broadcast, this should be changed
-    if res.is_err() {
-        error!("WebSocket requested command failed {}", res.unwrap_err());
+    if value.is_err() {
+        error!("WebSocket requested command failed {}", value.unwrap_err());
 
-        tx.send_response(ServerResponse::Execute {
+        ctx.event_tx.send_response(ServerResponse::Execute {
             id,
             failure: true,
-            response: "".to_string(),
+            response: None,
         });
         return;
     }
-    let res = res.unwrap();
 
-    tx.send_response(ServerResponse::Execute {
+    ctx.event_tx.send_response(ServerResponse::Execute {
         id,
         failure: false,
-        response: res,
+        response: Some(value.unwrap()),
     })
 }

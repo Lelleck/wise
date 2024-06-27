@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{event::RconEvent, exporting::auth::AuthHandle};
 
@@ -24,30 +25,40 @@ pub enum ServerResponse {
         id: String,
 
         /// Indicates whether the request could not be fulfilled due
-        /// to an internal error.
-        ///
-        /// Note: Should the HLL server respond with `FAIL` this is
-        /// not considered a failed response.
+        /// to an internal error. Should the HLL server respond with
+        /// `FAIL` this is not considered a failed response.
         failure: bool,
 
-        /// The response from the HLL server.
-        response: String,
+        /// The response from the HLL server. Either as string
+        /// if executed as [`CommandKind::Raw`] else as JSON.
+        response: Option<Value>,
     },
 }
 
+/// All commands that are supported by wise natively.
+#[derive(Debug, Clone, Deserialize)]
+pub enum CommandKind {
+    /// Execute a request directly on the HLL server without parsing.
+    Raw {
+        command: String,
+
+        #[serde(default)]
+        long_response: bool,
+    },
+    GetPlayerIds,
+    GetGameState,
+    GetPlayerInfo(String),
+}
+
 /// All possible messages which can be received by the websocket.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum ClientWsMessage {
     /// Execute a command on the HLL server and return the response.
     Execute {
         /// The id of the message used by the client to uniquely identify the response.
         id: String,
 
-        /// The command to execute.
-        command: String,
-
-        /// Whether the expected response is long.
-        #[serde(default)]
-        long_response: bool,
+        /// The type of command to execute.
+        kind: CommandKind,
     },
 }
