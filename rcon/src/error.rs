@@ -9,9 +9,6 @@ pub enum RconError {
     #[error("The data received is invalid and could not be converted to UTF-8.")]
     InvalidData,
 
-    #[error("The server returned a 'FAIL' for the requested operation.")]
-    Failure,
-
     #[error("Error occurred while parsing with nom.")]
     ParsingError(nom::Err<nom::error::Error<String>>),
 

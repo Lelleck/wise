@@ -15,6 +15,7 @@ pub struct ConnectionPool {
     pub config: Arc<AppConfig>,
 }
 
+// TODO: remove the pool error enum its useless
 #[derive(Debug, Error)]
 pub enum PoolError {
     ///
@@ -31,7 +32,6 @@ impl From<RconError> for PoolError {
     fn from(value: RconError) -> Self {
         match &value {
             RconError::InvalidData => Self::Recoverable(value),
-            RconError::Failure => Self::Recoverable(value),
             RconError::ParsingError(_) => Self::Recoverable(value),
             RconError::IoError(e) => match e {
                 ErrorKind::ConnectionReset => Self::Recoverable(value),
@@ -76,10 +76,9 @@ impl ConnectionPool {
                 return Ok(res.unwrap());
             }
 
+            // Should a connection fail for any reason it is discarded.
+            // This prevents stuck data in a TcpStream from messing up future parsers.
             let error = res.unwrap_err();
-            if matches!(error, RconError::Failure) {
-                self.return_connection(connection).await;
-            }
 
             retries += 1;
             if retries > MAX_RETRIES {

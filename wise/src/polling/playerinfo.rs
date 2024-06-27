@@ -5,7 +5,7 @@ use crate::event::RconEvent;
 use super::utils::{detect, PollWaiter};
 use rcon::parsing::{playerinfo::PlayerInfo, Player};
 use serde::Serialize;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use super::PollingContext;
 
@@ -88,6 +88,11 @@ pub async fn poll_playerinfo(
                 Box::pin(c.fetch_playerinfo(owned))
             })
             .await?;
+
+        let Some(current) = current else {
+            warn!("Retrieving player info failed");
+            return Ok(());
+        };
 
         if previous.is_none() {
             debug!("Started polling with: {:?}", current);

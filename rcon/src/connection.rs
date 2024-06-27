@@ -78,7 +78,7 @@ impl RconConnection {
     pub async fn fetch_playerinfo<'a, 'b>(
         &'a mut self,
         player_name: String,
-    ) -> Result<PlayerInfo, RconError> {
+    ) -> Result<Option<PlayerInfo>, RconError> {
         let cmd = format!("PlayerInfo {}", player_name);
         let input = self.execute(false, cmd).await?;
         PlayerInfo::parse(&input)

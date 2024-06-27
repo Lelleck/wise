@@ -28,12 +28,12 @@ pub struct PlayerInfo {
 }
 
 impl PlayerInfo {
-    pub fn parse(input: &str) -> Result<Self, RconError> {
+    pub fn parse(input: &str) -> Result<Option<Self>, RconError> {
         if input == "FAIL" {
-            return Err(RconError::Failure);
+            return Ok(None);
         }
 
-        Ok(take_playerinfo(input).map(|o| o.1)?)
+        Ok(Some(take_playerinfo(input).map(|o| o.1)?))
     }
 }
 
