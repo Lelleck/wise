@@ -3,12 +3,8 @@ from datetime import datetime
 import wise_lib
 import sys
 
-if len(sys.argv) == 3:
-    ADDRESS = sys.argv[1]
-    PASSWORD = sys.argv[2]
-else:
-    ADDRESS = "ws://localhost:25052"
-    PASSWORD = None
+ADDRESS = "ws://localhost:25052"
+TOKEN = "123"
 
 def on_message(ws, message):
     message = wise_lib.parse_wise_event(message)
@@ -69,8 +65,8 @@ def on_close(ws, code, msg):
     print(f"Connection closed with code: {code}, Message: {msg}")
 
 def on_open(ws):
-    if PASSWORD:
-        ws.send_text(PASSWORD)
+    if TOKEN:
+        ws.send_text(TOKEN)
 
     print("Connection opened")
 

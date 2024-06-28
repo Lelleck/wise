@@ -156,3 +156,9 @@ def get_enum_variant(obj: SimpleNamespace) -> tuple[str, SimpleNamespace]:
 
 def extract_id(obj: SimpleNamespace) -> str:
     return str(obj.Steam) if hasattr(obj, "Steam") else obj.Windows
+
+def is_kind(obj: SimpleNamespace, type: str) -> bool:
+    return hasattr(obj, type)
+
+def is_not_kind(obj: SimpleNamespace, type: str) -> bool:
+    return not hasattr(obj, type)

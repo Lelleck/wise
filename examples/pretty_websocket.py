@@ -8,10 +8,10 @@ import sys
 
 if len(sys.argv) == 3:
     ADDRESS = sys.argv[1]
-    PASSWORD = sys.argv[2]
+    TOKEN = sys.argv[2]
 else:
     ADDRESS = "ws://localhost:25052"
-    PASSWORD = None
+    # TOKEN = ""
 
 def on_message(ws, message):
     message = wise_lib.parse_wise_event(message)
@@ -142,9 +142,7 @@ def on_close(ws, close_status_code, close_msg):
     print(f"Connection closed with code: {close_status_code}, message: {close_msg}")
 
 def on_open(ws: websocket.WebSocket):
-    if PASSWORD:
-        ws.send_text(PASSWORD)
-
+    ws.send_text(TOKEN)
     print(f"{Back.magenta}{Style.bold} Connection opened {Style.reset}")
 
 if __name__ == "__main__":

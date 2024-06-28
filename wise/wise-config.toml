@@ -11,12 +11,12 @@ cooldown_ms = 1000 # Milliseconds before opening another connection to the serve
 
 [auth]
 [[auth.tokens]]
-name = "events-script" # A custom name for the token emitted in logs, should be descriptive and unique
-value = "" # The token passed by requesting applications
-perms.write_rcon = false
-perms.read_rcon_events = true
+#name = "my-token" # A custom name for the token emitted in logs, should be descriptive and unique
+#value = "" # The token passed by requesting applications
+#perms.write_rcon = false
+#perms.read_rcon_events = true
 
-# Unsupport at the moment
+# ** Below options are unsupport **
 #[auth.tokens.perms.read]
 #rcon_events = false # Whether they are allowed to read events emitted by RCON
 
