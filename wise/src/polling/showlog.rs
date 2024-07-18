@@ -1,6 +1,6 @@
 use rcon::parsing::showlog::{LogKind, LogLine};
 use tracing::{debug, instrument};
-use wise_api::rcon::RconEvent;
+use wise_api::events::RconEvent;
 
 use crate::polling_manager::PollingManager;
 

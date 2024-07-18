@@ -1,7 +1,7 @@
 use tokio::sync::{broadcast::Receiver, broadcast::Sender};
 use wise_api::{
+    events::RconEvent,
     messages::{ServerWsMessage, ServerWsResponse},
-    rcon::RconEvent,
 };
 
 const EVENT_QUEUE_CAPACITY: usize = 1000;

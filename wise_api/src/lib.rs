@@ -1,2 +1,4 @@
+pub mod events;
 pub mod messages;
-pub mod rcon;
+
+pub use rcon;

@@ -1,6 +1,6 @@
 use rcon::parsing::gamestate::GameState;
 use tracing::{debug, instrument};
-use wise_api::rcon::{GameStateChanges, RconEvent};
+use wise_api::events::{GameStateChanges, RconEvent};
 
 use super::{
     utils::{detect, PollWaiter},

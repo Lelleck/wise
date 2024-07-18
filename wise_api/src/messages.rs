@@ -3,7 +3,7 @@
 use rcon::parsing::{gamestate::GameState, playerinfo::PlayerInfo, Player};
 use serde::{Deserialize, Serialize};
 
-use super::rcon::RconEvent;
+use super::events::RconEvent;
 
 /// All possible messages emitted over the websocket.
 #[derive(Debug, Clone, Serialize, Deserialize)]

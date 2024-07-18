@@ -1,7 +1,7 @@
 use super::utils::{detect, PollWaiter};
 use rcon::parsing::{playerinfo::PlayerInfo, Player};
 use tracing::{debug, instrument, warn};
-use wise_api::rcon::{PlayerChanges, RconEvent, ScoreKind};
+use wise_api::events::{PlayerChanges, RconEvent, ScoreKind};
 
 use super::PollingContext;
 
