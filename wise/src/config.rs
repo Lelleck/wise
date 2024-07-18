@@ -96,9 +96,13 @@ pub struct WebSocketConfig {
 
 /// Configure logggin of the application.
 #[derive(Debug, Clone, Deserialize)]
-pub struct LoggingConfig {
+pub struct OperationalConfig {
     #[serde(default)]
-    pub level: i32,
+    pub log_level: i32,
+
+    /// Whether to run a simple CLI which connects to the Hell Let Loose server.
+    #[serde(default)]
+    pub direct_cli: bool,
 }
 
 /// Overall configuration of the application.
@@ -117,7 +121,7 @@ pub struct FileConfig {
     pub exporting: ExportingConfig,
 
     /// Configuration for logging behaviour.
-    pub logging: LoggingConfig,
+    pub operational: OperationalConfig,
 }
 
 pub type AppConfig = watch::Receiver<FileConfig>;

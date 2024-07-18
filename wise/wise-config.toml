@@ -1,13 +1,23 @@
 [logging]
-level = 0 # The logging level to use, overrides passed by argument. `-2` is only error, `2` is everything.
+# The logging level to use, overrides passed by argument. 
+# `-2` is only error, `2` is everything.
+level = 0
+# Do not run wise, instead open an interactive terminal connection 
+# with the Hell Let Loose server. Useful for testing the API without
+# the need to open the game.
+direct-cli = false 
 
 [rcon]
-address = "" # The address and port to connect to
-password = "" # The password used to login
+# The address and port to connect to
+address = "" 
+# The password used to login
+password = "" 
 
 [polling]
-wait_ms = 1000 # Milliseconds to wait between pollings
-cooldown_ms = 1000 # Milliseconds before opening another connection to the server
+# Milliseconds to wait between pollings
+wait_ms = 1000 
+# Milliseconds before opening another connection to the server
+cooldown_ms = 1000 
 
 [auth]
 [[auth.tokens]]
@@ -38,9 +48,14 @@ cooldown_ms = 1000 # Milliseconds before opening another connection to the serve
 
 [exporting]
 [exporting.websocket]
-enabled = true # Enable or disable the websocket
-address = "localhost:25053" # The address to which the websocket should bind to
+# Enable or disable the websocket
+enabled = true 
+# The address to which the websocket should bind to
+address = "localhost:25053" 
 
-tls = false # Enable or disable TLS
-#cert_file = "" # Path to the certificate, only needs to be set if tls is enabled 
-#key_file = "" # Path to the key file, only needs ot be set if tls is enabled
+# Enable or disable TLS
+tls = false 
+# Path to the certificate, only needs to be set if tls is enabled 
+#cert_file = "" 
+# Path to the key file, only needs ot be set if tls is enabled
+#key_file = "" 

@@ -12,7 +12,10 @@ use config::{setup_config, AppConfig, CliConfig};
 
 use exporting::{queue::EventSender, setup_exporting};
 use services::*;
-use tokio::time::sleep;
+use tokio::{
+    io::{stdin, AsyncBufReadExt, BufReader},
+    time::sleep,
+};
 use tracing::{error, info, level_filters::LevelFilter};
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, Layer};
 
@@ -23,6 +26,11 @@ use utils::get_levelfilter;
 async fn main() -> Result<(), Box<dyn Error>> {
     let config = load_config()?;
     info!("File config intialized... Testing connectivity to server");
+
+    if config.borrow().operational.direct_cli {
+        run_direct_cli(&config).await?;
+        return Ok(());
+    }
 
     test_connectivity(&config.borrow().rcon).await?;
     info!("Connection to server successfully tested... Starting wise");
@@ -58,8 +66,9 @@ fn load_config() -> Result<AppConfig, Box<dyn Error>> {
         loop {
             _ = rx_clone
                 .wait_for(|obj| {
-                    _ = reload_handle
-                        .modify(|layer| *layer.filter_mut() = get_levelfilter(obj.logging.level));
+                    _ = reload_handle.modify(|layer| {
+                        *layer.filter_mut() = get_levelfilter(obj.operational.log_level)
+                    });
                     return true;
                 })
                 .await;
@@ -80,4 +89,22 @@ async fn test_connectivity(
     }
 
     Ok(())
+}
+
+async fn run_direct_cli(config: &AppConfig) -> Result<(), Box<dyn Error>> {
+    let reader = BufReader::new(stdin());
+    let mut lines = reader.lines();
+
+    let mut connection = RconConnection::new(&config.borrow().rcon).await?;
+    info!("Running direct CLI to Hell Let Loose server");
+
+    loop {
+        let command = lines.next_line().await?;
+        if command.is_none() {
+            continue;
+        }
+
+        let response = connection.execute(true, command.unwrap()).await?;
+        println!("{}", response);
+    }
 }
