@@ -12,16 +12,13 @@ use tracing::{debug, error, info, info_span, instrument, trace, warn};
 
 use crate::{
     config::AppConfig,
-    connection_pool::ConnectionPool,
-    exporting::{
-        auth::{authenticate_token, AuthHandle},
-        websocket::{ClientWsMessage, ServerResponse, ServerWsMessage},
-    },
+    connection_pool::{ConnectionPool, PoolError},
+    exporting::auth::{authenticate_token, AuthHandle},
 };
 
-use crate::exporting::queue::*;
+use wise_api::messages::*;
 
-use super::CommandKind;
+use crate::exporting::queue::*;
 
 #[derive(Debug, Clone)]
 struct WsContext {
@@ -107,7 +104,7 @@ where
     let span = info_span!("token_span", token = ?ctx.auth.name);
     let _enter = span.enter();
 
-    let json = serde_json::to_string(&ServerWsMessage::AuthStatus(ctx.auth.clone())).unwrap();
+    let json = serde_json::to_string(&ServerWsMessage::Authenticated).unwrap();
     _ = ws_stream.send(Message::text(json)).await;
 
     info!("WebSocket connection full ready");
@@ -190,52 +187,51 @@ async fn handle_client_message(message: ClientWsMessage, mut ctx: WsContext) {
     }
 
     let ClientWsMessage::Execute { id, kind } = message;
-    // TODO: make it generic and remove these unwraps
-    let value = match kind {
-        CommandKind::Raw {
-            command,
-            long_response,
-        } => serde_json::to_value(
-            ctx.pool
-                .execute(|c| Box::pin(c.execute(long_response, command.clone())))
-                .await
-                .unwrap(),
-        ),
-        CommandKind::GetGameState => serde_json::to_value(
-            ctx.pool
-                .execute(|c| Box::pin(c.fetch_gamestate()))
-                .await
-                .unwrap(),
-        ),
-        CommandKind::GetPlayerIds => serde_json::to_value(
-            ctx.pool
-                .execute(|c| Box::pin(c.fetch_playerids()))
-                .await
-                .unwrap(),
-        ),
-        CommandKind::GetPlayerInfo(player) => serde_json::to_value(
-            ctx.pool
-                .execute(|c| Box::pin(c.fetch_playerinfo(player.clone())))
-                .await
-                .unwrap(),
-        ),
-    };
+    let response_kind = execute_client_command(&mut ctx, kind).await;
 
-    // TODO: currently all requests are broadcast, this should be changed
-    if value.is_err() {
-        error!("WebSocket requested command failed {}", value.unwrap_err());
-
-        ctx.event_tx.send_response(ServerResponse::Execute {
+    let ws_response = match response_kind {
+        Ok(o) => ServerWsResponse::Execute {
+            id,
+            failure: false,
+            response: Some(o),
+        },
+        Err(_) => ServerWsResponse::Execute {
             id,
             failure: true,
             response: None,
-        });
-        return;
-    }
+        },
+    };
 
-    ctx.event_tx.send_response(ServerResponse::Execute {
-        id,
-        failure: false,
-        response: Some(value.unwrap()),
-    })
+    ctx.event_tx.send_response(ws_response);
+}
+
+async fn execute_client_command(
+    ctx: &mut WsContext,
+    kind: CommandRequestKind,
+) -> Result<CommandResponseKind, PoolError> {
+    match kind {
+        CommandRequestKind::Raw {
+            command,
+            long_response,
+        } => ctx
+            .pool
+            .execute(|c| Box::pin(c.execute(long_response, command.clone())))
+            .await
+            .map(|o| CommandResponseKind::Raw(o)),
+        CommandRequestKind::GetGameState => ctx
+            .pool
+            .execute(|c| Box::pin(c.fetch_gamestate()))
+            .await
+            .map(|o| CommandResponseKind::GetGameState(o)),
+        CommandRequestKind::GetPlayerIds => ctx
+            .pool
+            .execute(|c| Box::pin(c.fetch_playerids()))
+            .await
+            .map(|o| CommandResponseKind::GetPlayerIds(o)),
+        CommandRequestKind::GetPlayerInfo(player) => ctx
+            .pool
+            .execute(|c| Box::pin(c.fetch_playerinfo(player.clone())))
+            .await
+            .map(|o| CommandResponseKind::GetPlayerInfo(o)),
+    }
 }

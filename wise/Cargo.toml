@@ -1,6 +1,6 @@
 [package]
 name = "wise"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -25,3 +25,4 @@ tokio-rustls = { version = "0.26.0", default-features = false, features = ["ring
 notify = "6.1.1"
 futures = "0.3.30"
 rand = "0.8.5"
+wise_api = { version = "0.1.0", path = "../wise_api" }

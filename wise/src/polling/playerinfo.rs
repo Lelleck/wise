@@ -1,66 +1,9 @@
-use std::fmt::Debug;
-
-use crate::event::RconEvent;
-
 use super::utils::{detect, PollWaiter};
 use rcon::parsing::{playerinfo::PlayerInfo, Player};
-use serde::Serialize;
 use tracing::{debug, instrument, warn};
+use wise_api::rcon::{PlayerChanges, RconEvent, ScoreKind};
 
 use super::PollingContext;
-
-// TODO: maybe we can make this generic?
-#[derive(Debug, Clone, Serialize)]
-pub enum PlayerChanges {
-    Unit {
-        old: Option<u64>,
-        new: Option<u64>,
-    },
-
-    Team {
-        old: String,
-        new: String,
-    },
-
-    Role {
-        old: String,
-        new: String,
-    },
-
-    Loadout {
-        old: Option<String>,
-        new: Option<String>,
-    },
-
-    Kills {
-        old: u64,
-        new: u64,
-    },
-
-    Deaths {
-        old: u64,
-        new: u64,
-    },
-
-    Score {
-        kind: ScoreKind,
-        old: u64,
-        new: u64,
-    },
-
-    Level {
-        old: u64,
-        new: u64,
-    },
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub enum ScoreKind {
-    Combat,
-    Offense,
-    Defense,
-    Support,
-}
 
 /// Consistently polls the current state of a player and records the changes.
 #[instrument(level = "debug", skip_all, fields(player = ?player, poller_id = ctx.id))]

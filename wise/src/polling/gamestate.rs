@@ -1,23 +1,11 @@
 use rcon::parsing::gamestate::GameState;
-use serde::Serialize;
 use tracing::{debug, instrument};
-
-use crate::event::RconEvent;
+use wise_api::rcon::{GameStateChanges, RconEvent};
 
 use super::{
     utils::{detect, PollWaiter},
     PollingContext,
 };
-
-#[derive(Debug, Clone, Serialize)]
-pub enum GameStateChanges {
-    AlliedPlayers { old: u64, new: u64 },
-    AxisPlayers { old: u64, new: u64 },
-    AlliedScore { old: u64, new: u64 },
-    AxisScore { old: u64, new: u64 },
-    Map { old: String, new: String },
-    NextMap { old: String, new: String },
-}
 
 #[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
 pub async fn poll_gamestate(mut ctx: PollingContext) -> Result<(), Box<dyn std::error::Error>> {

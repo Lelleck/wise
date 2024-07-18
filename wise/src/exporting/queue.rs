@@ -1,8 +1,8 @@
 use tokio::sync::{broadcast::Receiver, broadcast::Sender};
-
-use crate::event::RconEvent;
-
-use super::websocket::{ServerResponse, ServerWsMessage};
+use wise_api::{
+    messages::{ServerWsMessage, ServerWsResponse},
+    rcon::RconEvent,
+};
 
 const EVENT_QUEUE_CAPACITY: usize = 1000;
 
@@ -22,7 +22,7 @@ impl EventSender {
         EventReceiver::new(Sender::subscribe(&self.tx))
     }
 
-    pub fn send_response(&mut self, response: ServerResponse) {
+    pub fn send_response(&mut self, response: ServerWsResponse) {
         _ = self.tx.send(ServerWsMessage::Response(response));
     }
 

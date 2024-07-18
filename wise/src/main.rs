@@ -1,5 +1,4 @@
 pub mod config;
-pub mod event;
 pub mod exporting;
 pub mod polling;
 pub mod services;
