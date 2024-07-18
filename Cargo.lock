@@ -1038,13 +1038,12 @@ dependencies = [
 
 [[package]]
 name = "rcon"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bytes",
  "lazy_static",
  "nom",
  "serde",
- "serde_derive",
  "thiserror",
  "tokio",
  "tracing",
