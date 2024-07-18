@@ -8,14 +8,14 @@ use nom::{
     sequence::{delimited, separated_pair, tuple},
     Err, IResult,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::RconError;
 
 use super::{utils::take_u64, Player, PlayerId};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct LogLine {
     pub timestamp: u64,
     pub kind: LogKind,
@@ -23,7 +23,7 @@ pub struct LogLine {
 
 //        [38:03 min (1718194470)] MATCH ENDED `CARENTAN WARFARE` ALLIED (2 - 2) AXIS
 //        [36:18 min (1718194575)] MATCH START SAINTE-MÈRE-ÉGLISE WARFARE
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum LogKind {
     Connect {
         player: Player,

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rcon = { version = "0.1.0", path = "../rcon" }
+rcon = { version = "0.2.0", path = "../rcon" }
 thiserror = "1.0.61"
 tokio = { version = "1.38.0", features = ["full"] }
 lazy_static = "1.4.0"

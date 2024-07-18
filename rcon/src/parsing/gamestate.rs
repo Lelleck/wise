@@ -6,13 +6,13 @@ use nom::{
     sequence::tuple,
     IResult,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::RconError;
 
 use super::utils::{take_duration, take_u64};
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct GameState {
     pub allied_players: u64,
     pub axis_players: u64,
