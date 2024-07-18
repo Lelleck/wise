@@ -22,8 +22,8 @@ impl EventSender {
         EventReceiver::new(Sender::subscribe(&self.tx))
     }
 
-    pub fn send_response(&mut self, response: ServerWsResponse) {
-        _ = self.tx.send(ServerWsMessage::Response(response));
+    pub fn send_response(&mut self, id: String, value: ServerWsResponse) {
+        _ = self.tx.send(ServerWsMessage::Response { id, value });
     }
 
     pub fn send_rcon(&mut self, event: RconEvent) {

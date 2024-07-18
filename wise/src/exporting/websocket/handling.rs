@@ -186,23 +186,22 @@ async fn handle_client_message(message: ClientWsMessage, mut ctx: WsContext) {
         return;
     }
 
-    let ClientWsMessage::Execute { id, kind } = message;
-    let response_kind = execute_client_command(&mut ctx, kind).await;
+    let ClientWsMessage::Request { id, value } = message;
+    let ClientWsRequest::Execute(request) = value;
+    let response_kind = execute_client_command(&mut ctx, request).await;
 
     let ws_response = match response_kind {
         Ok(o) => ServerWsResponse::Execute {
-            id,
             failure: false,
             response: Some(o),
         },
         Err(_) => ServerWsResponse::Execute {
-            id,
             failure: true,
             response: None,
         },
     };
 
-    ctx.event_tx.send_response(ws_response);
+    ctx.event_tx.send_response(id, ws_response);
 }
 
 async fn execute_client_command(

@@ -12,7 +12,7 @@ pub enum ServerWsMessage {
     Rcon(RconEvent),
 
     /// The servers response to a previously send client message.
-    Response(ServerWsResponse),
+    Response { id: String, value: ServerWsResponse },
 
     /// The client has successfully logged in.
     Authenticated,
@@ -21,14 +21,14 @@ pub enum ServerWsMessage {
 /// All possible messages which can be sent by a client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientWsMessage {
-    /// Execute a command on the HLL server and return the response.
-    Execute {
-        /// The id of the message used by the client to uniquely identify the response.
-        id: String,
+    Request { id: String, value: ClientWsRequest },
+}
 
-        /// The type of command to execute.
-        kind: CommandRequestKind,
-    },
+/// Requests to the server sent by the client.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ClientWsRequest {
+    /// Execute a command on the HLL server and return the response.
+    Execute(CommandRequestKind),
 }
 
 /// The server responds to a previously send request by the client.
@@ -36,9 +36,6 @@ pub enum ClientWsMessage {
 pub enum ServerWsResponse {
     /// The response from the HLL server after executing a command.
     Execute {
-        /// The id of the message as set by the client.
-        id: String,
-
         /// Indicates whether the request could not be fulfilled due
         /// to an internal error. Should the HLL server respond with
         /// `FAIL` this is not considered a failed response.
