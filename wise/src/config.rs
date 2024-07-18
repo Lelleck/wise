@@ -78,10 +78,6 @@ pub struct WebSocketConfig {
     /// The address to which the websocket should bind to.
     pub address: String,
 
-    /// The password requesting applications must provide.
-    #[serde(default)]
-    pub password: Option<String>,
-
     /// Enable or disable TLS.
     pub tls: bool,
 
@@ -97,7 +93,6 @@ pub struct WebSocketConfig {
 /// Configure logggin of the application.
 #[derive(Debug, Clone, Deserialize)]
 pub struct OperationalConfig {
-    #[serde(default)]
     pub log_level: i32,
 
     /// Whether to run a simple CLI which connects to the Hell Let Loose server.

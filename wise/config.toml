@@ -14,9 +14,11 @@ address = ""
 password = "" 
 
 [polling]
-# Milliseconds to wait between pollings
+# Whether to enable or disable polling.
+enabled = true
+# Milliseconds to wait between pollings.
 wait_ms = 1000 
-# Milliseconds before opening another connection to the server
+# Milliseconds before opening another connection to the server.
 cooldown_ms = 1000 
 
 [auth]
@@ -51,7 +53,7 @@ cooldown_ms = 1000
 # Enable or disable the websocket
 enabled = true 
 # The address to which the websocket should bind to
-address = "localhost:25053" 
+address = "localhost:25052" 
 
 # Enable or disable TLS
 tls = false 

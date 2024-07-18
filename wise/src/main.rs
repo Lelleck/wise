@@ -25,7 +25,7 @@ use utils::get_levelfilter;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let config = load_config()?;
-    info!("File config intialized... Testing connectivity to server");
+    info!("File config intialized");
 
     if config.borrow().operational.direct_cli {
         run_direct_cli(&config).await?;
@@ -33,13 +33,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     test_connectivity(&config.borrow().rcon).await?;
-    info!("Connection to server successfully tested... Starting wise");
+    info!("Connection to server successfully tested");
 
     let tx = EventSender::new();
     let mut manager = PollingManager::new(config.clone(), tx.clone());
-    manager.resume_polling().await?;
 
     setup_exporting(&config, &tx, manager.pool()).await?;
+    manager.resume_polling().await?;
 
     loop {
         sleep(Duration::from_secs(1000)).await;

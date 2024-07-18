@@ -17,7 +17,7 @@ pub async fn build_websocket_exporter(
     config: AppConfig,
     pool: ConnectionPool,
 ) -> Result<impl Future<Output = Result<(), Box<dyn Error>>>, Box<dyn Error>> {
-    debug!("Initializing exporting over websockets");
+    debug!("Initializing exporting over WebSockets");
     let ws_config = &config.borrow().exporting.websocket;
 
     let acceptor = if ws_config.tls {
