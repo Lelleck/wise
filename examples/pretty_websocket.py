@@ -3,7 +3,6 @@ from colored import Fore, Back, Style  # Requires the 'colored' library
 from datetime import datetime
 import wise_lib
 import ssl
-import math
 import sys
 
 if len(sys.argv) == 3:
@@ -14,7 +13,7 @@ else:
     # TOKEN = ""
 
 def on_message(ws, message):
-    message = wise_lib.parse_wise_event(message)
+    message = wise_lib.json_into_namespace(message)
     if not hasattr(message, "Rcon"):
         # Thats not supposed to happen, yet!
         return

@@ -7,7 +7,7 @@ ADDRESS = "ws://localhost:25052"
 TOKEN = "123"
 
 def on_message(ws, message):
-    message = wise_lib.parse_wise_event(message)
+    message = wise_lib.json_into_namespace(message)
     if not hasattr(message, "Rcon"):
         # Thats not supposed to happen, yet!
         return
