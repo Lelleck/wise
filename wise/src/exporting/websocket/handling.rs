@@ -201,7 +201,9 @@ async fn handle_client_message(message: ClientWsMessage, mut ctx: WsContext) {
         },
     };
 
-    ctx.event_tx.send_response(id, ws_response);
+    if let Some(id) = id {
+        ctx.event_tx.send_response(id, ws_response);
+    }
 }
 
 async fn execute_client_command(

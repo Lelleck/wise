@@ -28,7 +28,7 @@ cooldown_ms = 1000
 #perms.write_rcon = false
 #perms.read_rcon_events = true
 
-# ** Below options are unsupport **
+# ** Below auth options are unsupport **
 #[auth.tokens.perms.read]
 #rcon_events = false # Whether they are allowed to read events emitted by RCON
 

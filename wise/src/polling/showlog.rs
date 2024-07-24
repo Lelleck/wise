@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use chrono::Utc;
 use rcon::parsing::showlog::{LogKind, LogLine};
 use tracing::{debug, instrument};
 use wise_api::events::RconEvent;
@@ -27,13 +30,17 @@ pub async fn poll_showlog(
 }
 
 /// Merge
-fn merge_logs(old_logs: &mut Vec<LogLine>, new_logs: Vec<LogLine>) -> Vec<LogLine> {
+fn merge_logs(old_logs: &mut Vec<LogLine>, mut new_logs: Vec<LogLine>) -> Vec<LogLine> {
     let untracked_logs = new_logs
         .iter()
         .filter(|new_log| !old_logs.contains(new_log))
         .map(|l| l.clone())
         .collect::<Vec<LogLine>>();
-    *old_logs = new_logs;
+
+    old_logs.append(&mut new_logs);
+    let cutoff = (Utc::now() - Duration::from_secs(60 * 2)).timestamp() as u64;
+    old_logs.retain(|l| l.timestamp > cutoff);
+
     untracked_logs
 }
 
