@@ -49,15 +49,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 /// Loads the config from the file and setups logging.
 fn load_config() -> Result<AppConfig, Box<dyn Error>> {
     let cli_config = CliConfig::parse();
-    let level = get_levelfilter(cli_config.verbosity.into());
 
     let filtered_layer = fmt::Layer::default().with_filter(LevelFilter::INFO);
     let (filtered_layer, reload_handle) = reload::Layer::new(filtered_layer);
     tracing_subscriber::registry().with(filtered_layer).init();
 
     info!(
-        "Logging ({}) & CLI config initialized... Loading file config",
-        level
+        "Logging & CLI config initialized... Loading file config"
     );
 
     let rx = setup_config(cli_config.config_file)?;

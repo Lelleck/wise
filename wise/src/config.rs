@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use clap::{ArgAction, Parser};
+use clap::Parser;
 use config::{Config, ConfigError, File};
 use notify::{EventKind, Watcher};
 use rcon::connection::RconCredentials;
@@ -22,12 +22,8 @@ use tracing::{debug, error, info};
 #[command(name = "Wise")]
 pub struct CliConfig {
     /// The configuration file to use.
-    #[clap(short, long, default_value = "wise-config.toml")]
+    #[clap(default_value = "config.toml")]
     pub config_file: PathBuf,
-
-    /// Configure how verbose the application should start up with. `v` is Debug, `vv` is Trace
-    #[arg(short, long, action = ArgAction::Count)]
-    pub verbosity: u8,
 }
 
 impl CliConfig {}

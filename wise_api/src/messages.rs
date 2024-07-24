@@ -21,7 +21,11 @@ pub enum ServerWsMessage {
 /// All possible messages which can be sent by a client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientWsMessage {
-    Request { id: String, value: ClientWsRequest },
+    Request {
+        /// An optional id to uniquely identify a request. If [`None`] the server won't respond.
+        id: Option<String>,
+        value: ClientWsRequest,
+    },
 }
 
 /// Requests to the server sent by the client.
