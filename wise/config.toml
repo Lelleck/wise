@@ -1,7 +1,7 @@
-[logging]
+[operational]
 # The logging level to use, overrides passed by argument. 
 # `-2` is only error, `2` is everything.
-level = 0
+log_level = 0
 # Do not run wise, instead open an interactive terminal connection 
 # with the Hell Let Loose server. Useful for testing the API without
 # the need to open the game.
@@ -22,31 +22,15 @@ wait_ms = 1000
 cooldown_ms = 1000 
 
 [auth]
-[[auth.tokens]]
+# Should you define no tokens you must define an empty list.
+#tokens = []
+
+# Add tokens here to be able to access the websocket connection.
+#[[auth.tokens]]
 #name = "my-token" # A custom name for the token emitted in logs, should be descriptive and unique
 #value = "" # The token passed by requesting applications
 #perms.write_rcon = false
 #perms.read_rcon_events = true
-
-# ** Below auth options are unsupport **
-#[auth.tokens.perms.read]
-#rcon_events = false # Whether they are allowed to read events emitted by RCON
-
-#[auth.tokens.perms.write]
-# !! A very powerful permission !!
-# Allows direct communication with the HLL server, use with caution
-#rcon_raw.allow = true
-# This will only allow the direct execution of commands starting with any 
-# of the phrases in the given list. Comment out to allow all communications.
-#rcon_raw.allowed_commands = ["Punish"]
-
-# Whether the holder is allowed to execute commands that are "natively"
-# supported by wise, such as "PlayerInfo <Player>".
-#rcon_parsed.allow = true
-
-# Which commands the holder is able to execute, a full list can be found 
-# in the CommandKind list. [`CommandKind::Raw`] is ignored in this list.
-#rcon_parsed.allowed_commands = ["GetPlayerIds"]
 
 [exporting]
 [exporting.websocket]
