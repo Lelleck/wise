@@ -1,4 +1,4 @@
-use super::{utils::*, PlayerId};
+use super::{utils::*, Player, PlayerId};
 use crate::RconError;
 use nom::{
     bytes::complete::{tag, take_until},
@@ -34,6 +34,10 @@ impl PlayerInfo {
         }
 
         Ok(Some(take_playerinfo(input).map(|o| o.1)?))
+    }
+
+    pub fn as_player(&self) -> Player {
+        Player::new(self.name.clone(), self.id.clone())
     }
 }
 

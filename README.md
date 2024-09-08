@@ -36,6 +36,6 @@ As the project currently does not provide binaries users will have to compile it
 Luckily Cargo the manager of Rust provides a great user experience and compilation plus executing can be triggered via the `cargo run` command. 
 Before running make sure to be in the `wise/` directory where the config files should be located. 
 
-Executing `cargo run --release -- --config-file wise-config.toml` will build the entire application and execute it in release mode.
+Executing `cargo run --release -- wise-config.toml` will build the entire application and execute it in release mode.
 Initial compilation times of Rust are quite extensive as it compiles *all* dependencies, this means it will take some time to start.
 For quicker compilation times, during development for example, omitting the `--release` flag will yield a *very* significant boost.

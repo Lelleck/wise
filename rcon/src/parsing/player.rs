@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use nom::combinator::map;
 use nom::{branch::alt, IResult};
 use serde::{Deserialize, Serialize};
@@ -23,6 +25,15 @@ pub enum PlayerId {
     Windows(Uuid),
 }
 
+impl Display for PlayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlayerId::Steam(i) => i.fmt(f),
+            PlayerId::Windows(i) => i.fmt(f),
+        }
+    }
+}
+
 impl PlayerId {
     pub fn parse(input: &str) -> Option<Self> {
         if let Ok(steam_id) = input.parse() {
@@ -43,12 +54,5 @@ impl PlayerId {
             map(take_uuid, PlayerId::Windows),
             map(take_u64, PlayerId::Steam),
         ))(input)
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Steam(i) => i.to_string(),
-            Self::Windows(i) => i.to_string(),
-        }
     }
 }
