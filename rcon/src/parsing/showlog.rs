@@ -28,7 +28,7 @@ pub struct LogLine {
 pub enum LogKind {
     Connect {
         player: Player,
-        connect: bool,
+        has_connected: bool,
     },
     TeamSwitch {
         player: Player,
@@ -92,7 +92,13 @@ fn take_connect(input: &str) -> IResult<&str, LogKind> {
     let id = &id[2..id.len() - 1];
     let id = PlayerId::parse(id);
     let player = Player::new(name.to_string(), id);
-    return Ok((input, LogKind::Connect { player, connect }));
+    return Ok((
+        input,
+        LogKind::Connect {
+            player,
+            has_connected: connect,
+        },
+    ));
 }
 
 /// Parse a kill or team kill log line.

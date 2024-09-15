@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use nom::{
     bytes::complete::{tag, take_until, take_while1},
     combinator::map,
@@ -18,7 +16,7 @@ pub struct GameState {
     pub axis_players: u64,
     pub allied_score: u64,
     pub axis_score: u64,
-    pub remaining_time: Duration,
+    pub remaining_seconds: u64,
     pub map: String,
     pub next_map: String,
 }
@@ -57,7 +55,7 @@ fn take_gamestate(input: &str) -> IResult<&str, GameState> {
             _,
             axis_score,
             _,
-            remaining_time,
+            remaining_seconds,
             _,
             map,
             _,
@@ -67,7 +65,7 @@ fn take_gamestate(input: &str) -> IResult<&str, GameState> {
             axis_players,
             allied_score,
             axis_score,
-            remaining_time,
+            remaining_seconds,
             map: map.into(),
             next_map: next_map.into(),
         },

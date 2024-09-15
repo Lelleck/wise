@@ -17,6 +17,7 @@ pub struct PlayerInfo {
     pub team: String,
     pub role: String,
     pub unit: Option<u64>,
+    pub unit_name: Option<String>,
     pub loadout: Option<String>,
     pub kills: u64,
     pub deaths: u64,
@@ -74,6 +75,7 @@ fn take_playerinfo(input: &str) -> IResult<&str, PlayerInfo> {
             opt(tuple((
                 tag("\nUnit: "),
                 map_res(digit1, parse_u64),
+                tag(" - "),
                 take_until("\n"),
             ))),
             opt(tuple((tag("\nLoadout: "), take_until("\n")))),
@@ -112,6 +114,7 @@ fn take_playerinfo(input: &str) -> IResult<&str, PlayerInfo> {
             role: role.into(),
             loadout: loadout.map(|s| s.1.into()),
             unit: unit.map(|u| u.1),
+            unit_name: unit.map(|u| u.3.to_string()),
             kills,
             deaths,
             combat_score,

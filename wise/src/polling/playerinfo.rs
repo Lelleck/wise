@@ -82,7 +82,9 @@ fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Vec<PlayerChanges> {
         &new.unit,
         PlayerChanges::Unit {
             old: old.unit,
+            old_name: old.unit_name.clone(),
             new: new.unit,
+            new_name: new.unit_name.clone(),
         },
     );
 

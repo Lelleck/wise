@@ -15,7 +15,8 @@ impl Player {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(not(feature = "simple_api"), derive(Serialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum PlayerId {
     /// Steam conventiently uses a u64.
     Steam(u64),
@@ -30,6 +31,16 @@ impl Display for PlayerId {
             PlayerId::Steam(i) => i.fmt(f),
             PlayerId::Windows(i) => i.fmt(f),
         }
+    }
+}
+
+#[cfg(feature = "simple_api")]
+impl Serialize for PlayerId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }
 

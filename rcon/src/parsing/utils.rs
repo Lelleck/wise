@@ -1,4 +1,4 @@
-use std::{num::ParseIntError, time::Duration};
+use std::num::ParseIntError;
 
 use nom::{
     bytes::complete::tag, character::complete::digit1, combinator::map, sequence::tuple, IResult,
@@ -16,11 +16,9 @@ pub fn take_u64(input: &str) -> IResult<&str, u64> {
     Ok((input, num))
 }
 
-pub fn take_duration(input: &str) -> IResult<&str, Duration> {
+pub fn take_duration(input: &str) -> IResult<&str, u64> {
     map(
         tuple((take_u64, tag(":"), take_u64, tag(":"), take_u64)),
-        |(hours, _, minutes, _, seconds)| {
-            Duration::from_secs(hours * 3600 + minutes * 60 + seconds)
-        },
+        |(hours, _, minutes, _, seconds)| hours * 3600 + minutes * 60 + seconds,
     )(input)
 }

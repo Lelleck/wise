@@ -40,7 +40,9 @@ pub enum GameStateChanges {
 pub enum PlayerChanges {
     Unit {
         old: Option<u64>,
+        old_name: Option<String>,
         new: Option<u64>,
+        new_name: Option<String>,
     },
     Team {
         old: String,

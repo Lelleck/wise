@@ -51,7 +51,10 @@ async fn handle_untracked_log(
 ) {
     ctx.tx.send_rcon(RconEvent::Log(log_line.clone()));
     match &log_line.kind {
-        LogKind::Connect { player, connect } => match connect {
+        LogKind::Connect {
+            player,
+            has_connected,
+        } => match has_connected {
             true => {
                 debug!("Detected player {:?} connecting", player);
                 manager.start_playerinfo_poller(player.clone()).await;
