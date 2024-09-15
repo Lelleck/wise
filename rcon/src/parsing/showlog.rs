@@ -1,13 +1,14 @@
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until, take_while1},
-    character::complete::char,
+    character::complete::{char, multispace0},
     combinator::recognize,
     error::{Error, ErrorKind},
     multi::many0,
     sequence::{delimited, separated_pair, tuple},
     Err, IResult,
 };
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -42,10 +43,10 @@ pub enum LogKind {
         is_teamkill: bool,
         weapon: String,
     },
-    GameStart {
+    MatchStart {
         map: String,
     },
-    GameEnd {
+    MatchEnded {
         map: String,
         allied_score: u64,
         axis_score: u64,
@@ -56,7 +57,6 @@ pub enum LogKind {
         reach: String,
         content: String,
     },
-    Other {},
 }
 
 /// Parse the prelude of every log message and extract the timestamp.
@@ -138,6 +138,79 @@ fn take_kill(input: &str) -> IResult<&str, LogKind> {
     };
 
     return Ok((input, kind));
+}
+
+/// Take a match start/end log line.
+///
+/// ```
+/// use rcon::parsing::showlog::*;
+///
+/// let (_, log) = take_match("MATCH START         MATCH START SAINTE-MÈRE-ÉGLISE WARFARE\n").unwrap();
+/// assert!(matches!(log, LogKind::MatchStart { .. }));
+///
+/// let (_, log) = take_match("MATCH ENDED         MATCH ENDED `SAINTE-MÈRE-ÉGLISE WARFARE` ALLIED (2 - 2) AXIS\n").unwrap();
+/// assert!(matches!(log, LogKind::MatchEnded { allied_score: 2, axis_score: 2, .. }));
+/// ```
+pub fn take_match(input: &str) -> IResult<&str, LogKind> {
+    let (input, _) = tag("MATCH ")(input)?;
+    let (input, kind) = alt((tag("START"), tag("ENDED")))(input)?;
+    let (remaining_logs, space_map_info) = take_until("\n")(input)?;
+    let (map_info, _) = multispace0(space_map_info)?;
+
+    if kind == "START" {
+        let (map, _prelude) = tag("MATCH START ")(map_info)?;
+        return Ok((
+            remaining_logs,
+            LogKind::MatchStart {
+                map: map.to_string(),
+            },
+        ));
+    }
+
+    if kind != "ENDED" {
+        error!(
+            map_info,
+            "Match log line is neither of kind `START` nor `ENDED` instead `{}`", kind
+        );
+        return Err(nom::Err::Error(nom::error::Error::new(
+            input,
+            ErrorKind::Fail,
+        )));
+    }
+
+    let log = take_match_ended(input).unwrap();
+    Ok((remaining_logs, log))
+}
+
+/// Takes a match ended value and parses it using
+fn take_match_ended(input: &str) -> Result<LogKind, Option<regex::Error>> {
+    let pattern = r"`([^*]*)`.*\((\d+)\s*-\s*(\d+)\)";
+    let re = Regex::new(&pattern)?;
+
+    let Some(caps) = re.captures(input) else {
+        error!("Failed to capture match ended info for `{}`", input);
+        return Err(None);
+    };
+
+    if caps.len() != 4 {
+        error!("Failed to capture 3 groups for `{input}`");
+        return Err(None);
+    }
+
+    let map_name = &caps[1];
+    let Ok(allied_score) = caps[2].parse() else {
+        return Err(None);
+    };
+
+    let Ok(axis_score) = caps[3].parse() else {
+        return Err(None);
+    };
+
+    Ok(LogKind::MatchEnded {
+        map: map_name.to_string(),
+        allied_score,
+        axis_score,
+    })
 }
 
 /// Parse the name, faction and id component of a kill log.
@@ -227,7 +300,7 @@ fn take_logline(input: &str) -> IResult<&str, Option<LogLine>> {
     let (input, timestamp) = res.unwrap();
 
     // If we fail to parse the log line skip it
-    let Ok((input, kind)) = alt((take_connect, take_kill, take_chat))(input) else {
+    let Ok((input, kind)) = alt((take_connect, take_kill, take_chat, take_match))(input) else {
         let (input, _) = tuple((take_until("\n"), tag("\n")))(input)?;
         return Ok((input, None));
     };

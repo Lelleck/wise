@@ -85,8 +85,8 @@ async fn handle_untracked_log(
                 killer, killer_faction, kill_type, victim, victim_faction, weapon
             );
         }
-        LogKind::GameStart { map } => debug!("Detected match start on {}", map),
-        LogKind::GameEnd {
+        LogKind::MatchStart { map } => debug!("Detected match start on {}", map),
+        LogKind::MatchEnded {
             map,
             allied_score,
             axis_score,

@@ -4,6 +4,7 @@ from datetime import datetime
 import wise_lib
 import ssl
 import sys
+import json
 
 if len(sys.argv) == 3:
     ADDRESS = sys.argv[1]
@@ -51,7 +52,7 @@ def on_message(ws, message):
     
     elif hasattr(rcon_event, "Log"):
         print_prelude("LOG")
-        event_string = f"{Style.bold}{Fore.magenta}Unknown event{Style.reset}"
+        event_string = f"{Style.bold}{Fore.magenta}Unknown event: {Style.reset}"
         log_event = rcon_event.Log
 
         if hasattr(log_event.kind, "Kill"):
@@ -66,6 +67,9 @@ def on_message(ws, message):
             player_id = wise_lib.extract_id(connect_event.player.id)
             type = "connects" if connect_event.connect else "disconnects"
             event_string = f"{connect_event.player.name} {Fore.grey_0}{player_id}{Style.reset} {Style.bold}{Back.light_blue} {type} {Style.reset}"
+
+        elif hasattr(log_event.kind, "Chat"):
+            event_string = f"Chat Event"
 
         print(event_string)
 
