@@ -90,7 +90,7 @@ fn take_connect(input: &str) -> IResult<&str, LogKind> {
     let (name, id) = name_and_id.split_at(space_idx);
     let (name, _) = tag(" ")(name)?;
     let id = &id[2..id.len() - 1];
-    let id = PlayerId::parse(id).ok_or(Err::Error(Error::new(id, ErrorKind::HexDigit)))?;
+    let id = PlayerId::parse(id);
     let player = Player::new(name.to_string(), id);
     return Ok((input, LogKind::Connect { player, connect }));
 }

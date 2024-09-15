@@ -1,8 +1,7 @@
 use nom::{
     bytes::complete::{tag, take_until},
-    error::{Error, ErrorKind},
     multi::many0,
-    Err, IResult,
+    IResult,
 };
 use tracing::error;
 
@@ -27,10 +26,9 @@ fn take_player(input: &str) -> IResult<&str, Player> {
         }));
     };
 
-    let (name, steam_id) = encoded_player.split_at(splitter_idx);
-    let (steam_id, _) = tag(" : ")(steam_id)?;
-    let id =
-        PlayerId::parse(steam_id).ok_or(Err::Error(Error::new(steam_id, ErrorKind::HexDigit)))?;
+    let (name, id) = encoded_player.split_at(splitter_idx);
+    let (steam_id, _) = tag(" : ")(id)?;
+    let id = PlayerId::parse(steam_id);
 
     let player = Player {
         name: name.to_string(),

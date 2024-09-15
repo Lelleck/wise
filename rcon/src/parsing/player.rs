@@ -1,11 +1,7 @@
 use std::fmt::Display;
 
-use nom::combinator::map;
-use nom::{branch::alt, IResult};
+use nom::IResult;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-use super::utils::{take_u64, take_uuid};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Player {
@@ -21,8 +17,11 @@ impl Player {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PlayerId {
+    /// Steam conventiently uses a u64.
     Steam(u64),
-    Windows(Uuid),
+
+    /// Windows Ids are now, sadly so: an MD5 hash.
+    Windows(String),
 }
 
 impl Display for PlayerId {
@@ -35,24 +34,15 @@ impl Display for PlayerId {
 }
 
 impl PlayerId {
-    pub fn parse(input: &str) -> Option<Self> {
+    pub fn parse(input: &str) -> Self {
         if let Ok(steam_id) = input.parse() {
-            return Some(Self::Steam(steam_id));
+            return Self::Steam(steam_id);
         }
 
-        if let Ok(uuid) = Uuid::parse_str(input) {
-            return Some(Self::Windows(uuid));
-        }
-
-        None
+        Self::Windows(input.to_string())
     }
 
-    pub fn take(input: &str) -> IResult<&str, Self> {
-        // Make sure that UUID check comes first as the u64 check may simple consume the
-        // first digit of the UUID.
-        alt((
-            map(take_uuid, PlayerId::Windows),
-            map(take_u64, PlayerId::Steam),
-        ))(input)
+    pub fn take(input: &str) -> IResult<&str, PlayerId> {
+        Ok(("", Self::parse(input)))
     }
 }
