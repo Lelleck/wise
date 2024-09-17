@@ -4,7 +4,7 @@ use futures::Future;
 use rcon::{connection::RconConnection, RconError};
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tracing::trace;
+use tracing::{debug, error, trace};
 
 use crate::config::AppConfig;
 
@@ -81,9 +81,14 @@ impl ConnectionPool {
             let error = res.unwrap_err();
 
             retries += 1;
-            if retries > MAX_RETRIES {
+            if retries >= MAX_RETRIES {
+                error!("Reached maximum amount of retries for executing a function on a rcon connection ({}/{}): {}", retries, MAX_RETRIES, error);
                 return Err(PoolError::Unrecoverable(error));
             }
+            debug!(
+                "Failed to execute function on rcon connection ({}/{}): {}",
+                retries, MAX_RETRIES, error
+            );
         }
     }
 

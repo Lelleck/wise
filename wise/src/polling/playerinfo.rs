@@ -33,7 +33,7 @@ pub async fn poll_playerinfo(
             .await?;
 
         let Some(current) = current else {
-            warn!("Retrieving player info failed");
+            debug!("Retrieving player info failed");
             return Ok(());
         };
 

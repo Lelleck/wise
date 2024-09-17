@@ -10,7 +10,7 @@ use nom::{
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{error, trace};
 
 use crate::RconError;
 
@@ -164,11 +164,10 @@ pub fn take_match(input: &str) -> IResult<&str, LogKind> {
     let (map_info, _) = multispace0(space_map_info)?;
 
     if kind == "START" {
-        let (map, _prelude) = tag("MATCH START ")(map_info)?;
         return Ok((
             remaining_logs,
             LogKind::MatchStart {
-                map: map.to_string(),
+                map: map_info.to_string(),
             },
         ));
     }
@@ -307,7 +306,9 @@ fn take_logline(input: &str) -> IResult<&str, Option<LogLine>> {
 
     // If we fail to parse the log line skip it
     let Ok((input, kind)) = alt((take_connect, take_kill, take_chat, take_match))(input) else {
-        let (input, _) = tuple((take_until("\n"), tag("\n")))(input)?;
+        let (input, skipped) = tuple((take_until("\n"), tag("\n")))(input)?;
+        trace!("Failed to parse `{}`", skipped.0);
+
         return Ok((input, None));
     };
     let (input, _) = tag("\n")(input)?;
