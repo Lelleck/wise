@@ -1,18 +1,17 @@
-use queue::EventSender;
-
-use crate::{config::AppConfig, connection_pool::ConnectionPool};
+use crate::services::DiContainer;
 
 pub mod auth;
 pub mod queue;
 pub mod websocket;
 
-pub async fn setup_exporting(
-    config: &AppConfig,
-    tx: &EventSender,
-    pool: ConnectionPool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if config.borrow().exporting.websocket.enabled {
-        let task = websocket::build_websocket_exporter(tx.clone(), config.clone(), pool).await?;
+pub async fn setup_exporting(di: &DiContainer) -> Result<(), Box<dyn std::error::Error>> {
+    if di.config.borrow().exporting.websocket.enabled {
+        let task = websocket::build_websocket_exporter(
+            di.game_events.clone(),
+            di.config.clone(),
+            di.connection_pool.clone(),
+        )
+        .await?;
         _ = tokio::spawn(async move {
             _ = task.await;
         });

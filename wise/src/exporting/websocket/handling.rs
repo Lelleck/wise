@@ -85,7 +85,7 @@ async fn accept_connection(stream: TcpStream, acceptor: Option<TlsAcceptor>, ctx
         handle_connection(ws_stream, ctx).await;
     };
 
-    info!("WebSocket connection closed");
+    debug!("WebSocket connection closed");
 }
 
 /// Handle a single websocket connection.
@@ -210,29 +210,28 @@ async fn execute_client_command(
     ctx: &mut WsContext,
     kind: CommandRequestKind,
 ) -> Result<CommandResponseKind, PoolError> {
-    match kind {
-        CommandRequestKind::Raw {
-            command,
-            long_response,
-        } => ctx
-            .pool
-            .execute(|c| Box::pin(c.execute(long_response, command.clone())))
-            .await
-            .map(|o| CommandResponseKind::Raw(o)),
-        CommandRequestKind::GetGameState => ctx
-            .pool
-            .execute(|c| Box::pin(c.fetch_gamestate()))
-            .await
-            .map(|o| CommandResponseKind::GetGameState(o)),
-        CommandRequestKind::GetPlayerIds => ctx
-            .pool
-            .execute(|c| Box::pin(c.fetch_playerids()))
-            .await
-            .map(|o| CommandResponseKind::GetPlayerIds(o)),
-        CommandRequestKind::GetPlayerInfo(player) => ctx
-            .pool
-            .execute(|c| Box::pin(c.fetch_playerinfo(player.clone())))
-            .await
-            .map(|o| CommandResponseKind::GetPlayerInfo(o)),
-    }
+    todo!();
+    /*
+       match kind {
+           CommandRequestKind::Raw {
+               command,
+               long_response,
+           } => panic!(),
+           CommandRequestKind::GetGameState => ctx
+               .pool
+               .execute(|c| Box::pin(c.fetch_gamestate()))
+               .await
+               .map(|o| CommandResponseKind::GetGameState(o)),
+           CommandRequestKind::GetPlayerIds => ctx
+               .pool
+               .execute(|c| Box::pin(c.fetch_playerids()))
+               .await
+               .map(|o| CommandResponseKind::GetPlayerIds(o)),
+           CommandRequestKind::GetPlayerInfo(player) => ctx
+               .pool
+               .execute(|c| Box::pin(c.fetch_playerinfo(player.clone())))
+               .await
+               .map(|o| CommandResponseKind::GetPlayerInfo(o)),
+       }
+    */
 }

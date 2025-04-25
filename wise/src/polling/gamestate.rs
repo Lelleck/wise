@@ -1,11 +1,4 @@
-use rcon::parsing::gamestate::GameState;
-use tracing::{debug, instrument};
-use wise_api::events::{GameStateChanges, RconEvent};
-
-use super::{
-    utils::{detect, PollWaiter},
-    PollingContext,
-};
+/*
 
 #[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
 pub async fn poll_gamestate(mut ctx: PollingContext) -> Result<(), Box<dyn std::error::Error>> {
@@ -110,3 +103,4 @@ fn detect_changes(old: &GameState, new: &GameState) -> Vec<GameStateChanges> {
 
     changes
 }
+ */

@@ -1,196 +1,28 @@
-use super::utils::{detect, PollWaiter};
-use rcon::parsing::{playerinfo::PlayerInfo, Player};
-use tracing::{debug, instrument, warn};
-use wise_api::events::{PlayerChanges, RconEvent, ScoreKind};
+use std::time::Duration;
 
-use super::PollingContext;
+use crate::services::{game_master::IncomingState, DiContainer};
+
+use tokio::time::sleep;
+use tracing::{debug, instrument};
 
 /// Consistently polls the current state of a player and records the changes.
-#[instrument(level = "debug", skip_all, fields(player = ?player, poller_id = ctx.id))]
-pub async fn poll_playerinfo(
-    player: Player,
-    mut ctx: PollingContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+#[instrument(level = "debug", skip_all)]
+pub async fn poll_players(mut di: DiContainer) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Starting player poller");
-    let player_name = player.name.clone();
-    let mut waiter = PollWaiter::new(ctx.config.clone());
-    let mut previous = None;
 
-    // Stop the loop if has_changed is false or has_changed is true
-    while ctx.rx.has_changed().map_or(false, |changed| !changed) {
-        waiter.wait().await;
-
-        // I don't know what the f*** this is and I don't care. This f******
+    // TODO: stop the loop if we go into hibernation
+    loop {
         // execute method is super janky generally. Maybe it will be looked at
-        // again sometime in the future.
-        let cloned_player_name = player_name.clone();
-        let current = ctx
-            .pool
-            .execute(move |c| {
-                let owned = cloned_player_name.clone();
-                Box::pin(c.fetch_playerinfo(owned))
-            })
-            .await?;
+        // TODO: do not exit the loop on connection failure
+        let mut conn = di.connection_pool.get_connection().await?;
+        let players = conn.fetch_players().await;
 
-        let Some(current) = current else {
-            debug!("Retrieving player info failed");
-            return Ok(());
-        };
+        di.connection_pool.return_connection(conn).await;
+        let di_copy = di.clone();
+        di.game_master
+            .update_state(IncomingState::Players(players), &di_copy)
+            .await;
 
-        if previous.is_none() {
-            debug!("Started polling with: {:?}", current);
-            ctx.tx.send_rcon(RconEvent::Player {
-                player: player.clone(),
-                changes: vec![],
-                new_state: current.clone(),
-            });
-            previous = Some(current);
-            continue;
-        }
-        let old = previous.clone().unwrap();
-
-        // TODO: maybe record current value in trace?
-        // trace!(player_info = current, "Acquired PlayerInfo");
-        let changes = detect_changes(&old, &current);
-        if changes.is_empty() {
-            continue;
-        }
-
-        debug!("Detected changes {:?}", changes);
-        ctx.tx.send_rcon(RconEvent::Player {
-            player: player.clone(),
-            changes,
-            new_state: current.clone(),
-        });
-        previous = Some(current);
+        sleep(Duration::from_millis(100)).await;
     }
-
-    debug!("Received cancellation request... Stopping polling");
-    Ok(())
-}
-
-/// Detects changes between two `PlayerInfo` and returns a list of activities the player did.
-fn detect_changes(old: &PlayerInfo, new: &PlayerInfo) -> Vec<PlayerChanges> {
-    if *old == *new {
-        return vec![];
-    }
-
-    let mut changes = vec![];
-    detect(
-        &mut changes,
-        &old.unit,
-        &new.unit,
-        PlayerChanges::Unit {
-            old: old.unit,
-            old_name: old.unit_name.clone(),
-            new: new.unit,
-            new_name: new.unit_name.clone(),
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.team,
-        &new.team,
-        PlayerChanges::Team {
-            old: old.team.clone(),
-            new: new.team.clone(),
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.role,
-        &new.role,
-        PlayerChanges::Role {
-            old: old.role.clone(),
-            new: new.role.clone(),
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.loadout,
-        &new.loadout,
-        PlayerChanges::Loadout {
-            old: old.loadout.clone(),
-            new: new.loadout.clone(),
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.kills,
-        &new.kills,
-        PlayerChanges::Kills {
-            old: old.kills,
-            new: new.kills,
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.deaths,
-        &new.deaths,
-        PlayerChanges::Deaths {
-            old: old.deaths,
-            new: new.deaths,
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.combat_score,
-        &new.combat_score,
-        PlayerChanges::Score {
-            kind: ScoreKind::Combat,
-            old: old.combat_score,
-            new: new.combat_score,
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.offense_score,
-        &new.offense_score,
-        PlayerChanges::Score {
-            kind: ScoreKind::Offense,
-            old: old.offense_score,
-            new: new.offense_score,
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.defense_score,
-        &new.defense_score,
-        PlayerChanges::Score {
-            kind: ScoreKind::Defense,
-            old: old.defense_score,
-            new: new.defense_score,
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.support_score,
-        &new.support_score,
-        PlayerChanges::Score {
-            kind: ScoreKind::Support,
-            old: old.support_score,
-            new: new.support_score,
-        },
-    );
-
-    detect(
-        &mut changes,
-        &old.level,
-        &new.level,
-        PlayerChanges::Level {
-            old: old.level,
-            new: new.level,
-        },
-    );
-
-    changes
 }

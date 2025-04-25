@@ -8,7 +8,7 @@ use std::{
 use clap::Parser;
 use config::{Config, ConfigError, File};
 use notify::{EventKind, Watcher};
-use rcon::connection::RconCredentials;
+use rcon::credentials::RconCredentials;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use tokio::sync::{
@@ -84,6 +84,11 @@ pub struct WebSocketConfig {
     /// Path to the key file.
     #[serde(default)]
     pub key_file: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FileOutputConfig {
+    pub enabled: bool,
 }
 
 /// Configure logggin of the application.

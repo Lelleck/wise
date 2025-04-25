@@ -1,6 +1,6 @@
 //! Messages that can be sent over the websocket connection.
 
-use rcon::parsing::{gamestate::GameState, playerinfo::PlayerInfo, Player};
+use rcon::parsing::{gamestate::GameState, playerinfo::PlayerData, Player};
 use serde::{Deserialize, Serialize};
 
 use super::events::RconEvent;
@@ -86,5 +86,5 @@ pub enum CommandResponseKind {
     GetGameState(GameState),
 
     /// The current player info.
-    GetPlayerInfo(Option<PlayerInfo>),
+    GetPlayerInfo(Option<PlayerData>),
 }

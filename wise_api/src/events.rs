@@ -1,6 +1,10 @@
 //! Objects related to RCON events emitted.
 
-use rcon::parsing::{gamestate::GameState, playerinfo::PlayerInfo, showlog::LogLine, Player};
+use rcon::parsing::{
+    gamestate::GameState,
+    playerinfo::{PlayerData, WorldPosition},
+    showlog::LogLine,
+};
 use serde::{Deserialize, Serialize};
 
 /// Any type of event that took place on the Hell Let Loose server.
@@ -9,9 +13,9 @@ pub enum RconEvent {
     /// An event related to a player took place. Should changes be empty
     /// we have has just now started polling the player.
     Player {
-        player: Player,
+        old: PlayerData,
+        new: PlayerData,
         changes: Vec<PlayerChanges>,
-        new_state: PlayerInfo,
     },
 
     /// A single new log message. All logs are individual.
@@ -38,23 +42,29 @@ pub enum GameStateChanges {
 /// All the values that can change for a [`PlayerInfo`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PlayerChanges {
-    Unit {
-        old: Option<u64>,
-        old_name: Option<String>,
-        new: Option<u64>,
-        new_name: Option<String>,
+    Name {
+        old: String,
+        new: String,
+    },
+    ClanTag {
+        old: String,
+        new: String,
+    },
+    Platoon {
+        old: String,
+        new: String,
     },
     Team {
-        old: String,
-        new: String,
+        old: i32,
+        new: i32,
     },
     Role {
-        old: String,
-        new: String,
+        old: i32,
+        new: i32,
     },
     Loadout {
-        old: Option<String>,
-        new: Option<String>,
+        old: String,
+        new: String,
     },
     Kills {
         old: u64,
@@ -70,8 +80,12 @@ pub enum PlayerChanges {
         new: u64,
     },
     Level {
-        old: u64,
-        new: u64,
+        old: i32,
+        new: i32,
+    },
+    WorldPosition {
+        old: WorldPosition,
+        new: WorldPosition,
     },
 }
 

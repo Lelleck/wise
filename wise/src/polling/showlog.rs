@@ -1,14 +1,4 @@
-use std::time::Duration;
-
-use chrono::Utc;
-use rcon::parsing::showlog::{LogKind, LogLine};
-use tracing::{debug, instrument};
-use wise_api::events::RconEvent;
-
-use crate::polling_manager::PollingManager;
-
-use super::{utils::PollWaiter, PollingContext};
-
+/*
 #[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
 pub async fn poll_showlog(
     mut manager: PollingManager,
@@ -100,3 +90,5 @@ async fn handle_untracked_log(
         _ => {}
     }
 }
+
+*/

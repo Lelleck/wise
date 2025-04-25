@@ -31,7 +31,8 @@ pub enum PoolError {
 impl From<RconError> for PoolError {
     fn from(value: RconError) -> Self {
         match &value {
-            RconError::InvalidData => Self::Recoverable(value),
+            RconError::InvalidData(_) => Self::Recoverable(value),
+            RconError::TimeOut => Self::Recoverable(value),
             RconError::ParsingError(_) => Self::Recoverable(value),
             RconError::IoError(e) => match e {
                 ErrorKind::ConnectionReset => Self::Recoverable(value),
@@ -92,7 +93,8 @@ impl ConnectionPool {
         }
     }
 
-    async fn return_connection(&mut self, connection: RconConnection) {
+    /// Return a connection to the pool.
+    pub async fn return_connection(&mut self, connection: RconConnection) {
         let mut lock = self.connections.lock().await;
         lock.push_back(connection);
         let size = lock.len();
@@ -100,7 +102,7 @@ impl ConnectionPool {
     }
 
     /// Get a connection from the pool or try to allocate one if the pool is empty.
-    async fn get_connection(&mut self) -> Result<RconConnection, PoolError> {
+    pub async fn get_connection(&mut self) -> Result<RconConnection, PoolError> {
         let connection = self.connections.lock().await.pop_front();
         if connection.is_some() {
             return Ok(connection.unwrap());
@@ -112,6 +114,7 @@ impl ConnectionPool {
     /// Attempt to allocate a connection.
     async fn allocate_connection(&mut self) -> Result<RconConnection, PoolError> {
         let config = self.config.borrow().rcon.clone();
+        trace!("Allocating new connection");
         let conn = RconConnection::new(&config).await?;
         Ok(conn)
     }

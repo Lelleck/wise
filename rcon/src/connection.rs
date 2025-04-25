@@ -1,49 +1,36 @@
-//! RCON connection related operations.
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+//! A connection to the HLL server using RCON v2.
+use std::time::Duration;
 
-use bytes::{Bytes, BytesMut};
-use lazy_static::lazy_static;
-use parsing::{
-    gamestate::GameState,
-    playerids::parse_playerids,
-    playerinfo::PlayerInfo,
-    showlog::{parse_loglines, LogLine},
-    Player,
-};
-use serde::Deserialize;
+use base64::{prelude::BASE64_STANDARD, Engine};
+use serde_json::{json, Value};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{self, AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
-    sync::Mutex,
     time::timeout,
 };
 use tracing::{debug, instrument, trace};
 
-use crate::*;
+use crate::{
+    constants::next_id, credentials::RconCredentials, messages::RconRequest,
+    parsing::playerinfo::PlayerData, *,
+};
 
-lazy_static! {
-    static ref RUNNING_ID: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
-}
+use super::messages::RconResponse;
 
-async fn next_id() -> u64 {
-    let mut id = RUNNING_ID.lock().await;
-    *id += 1;
-    *id
-}
-
-pub const BUFFER_LENGTH: usize = 32768;
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct RconCredentials {
-    pub address: SocketAddr,
-    pub password: String,
-}
-
+/// An active connection to the Hell Let Loose server.
 #[derive(Debug)]
 pub struct RconConnection {
+    /// A unique ID for this connection.
     id: u64,
+
+    /// The underlying tcp stream.
     tcp: TcpStream,
-    xor_key: Bytes,
+
+    /// The xor key used for "encryption".
+    xor_key: Option<Vec<u8>>,
+
+    /// The auth token passed with every request.
+    auth_token: Option<String>,
 }
 
 impl RconConnection {
@@ -53,143 +40,146 @@ impl RconConnection {
         debug!("Attempting to connect to {}", credentials.address);
         let mut tcp = TcpStream::connect(credentials.address).await?;
 
-        let mut buffer = BytesMut::zeroed(BUFFER_LENGTH);
-        let xor_length = tcp.read(&mut buffer).await?;
-        let xor_key = buffer.split_to(xor_length).freeze();
+        // Discard the V1 xor bytes
+        let mut buffer = [0u8; 4];
+        _ = tcp.read(&mut buffer).await?;
+
         let id = next_id().await;
+        let mut this = Self {
+            id,
+            tcp,
+            xor_key: None,
+            auth_token: None,
+        };
 
-        let mut rcon = RconConnection { id, tcp, xor_key };
+        // Get the xor key
+        let connect_response = this.execute(RconRequest::new("ServerConnect", "")).await?;
+        connect_response.assert_ok(RconError::InvalidData(
+            "Server responded with failure status code on 'ServerConnect' command.",
+        ))?;
 
-        let login_cmd = format!("Login {}", credentials.password);
-        let result = rcon.execute(false, login_cmd).await?;
+        let xor_key = BASE64_STANDARD
+            .decode(
+                connect_response
+                    .content_body
+                    .as_str()
+                    .ok_or(RconError::InvalidData(
+                        "Server sent something other than a string as content for ServerConnect.",
+                    ))?,
+            )
+            .map_err(|_| RconError::InvalidData("Failed to decode xor key."))?;
+        this.xor_key = Some(xor_key);
 
-        if !result.eq("SUCCESS") {
-            return Err(RconError::InvalidPassword);
-        }
+        // Get the auth token
+        let login_response = this
+            .execute(RconRequest::new("Login", credentials.password.clone()))
+            .await?;
+        login_response.assert_ok(RconError::InvalidPassword)?;
 
-        debug!("Successfully connected with connection id #{}", rcon.id);
-        Ok(rcon)
-    }
+        let auth_token = login_response
+            .content_body
+            .as_str()
+            .ok_or(RconError::InvalidData(
+                "Server sent something other than a string as content for Login.",
+            ))?;
+        this.auth_token = Some(auth_token.to_string());
 
-    pub fn id(&self) -> u64 {
-        self.id
-    }
-
-    pub async fn fetch_playerinfo<'a, 'b>(
-        &'a mut self,
-        player_name: String,
-    ) -> Result<Option<PlayerInfo>, RconError> {
-        let cmd = format!("PlayerInfo {}", player_name);
-        let input = self.execute(false, cmd).await?;
-        PlayerInfo::parse(&input)
-    }
-
-    pub async fn fetch_playerids(&mut self) -> Result<Vec<Player>, RconError> {
-        let cmd = format!("Get PlayerIds");
-        let input = self.execute(true, cmd).await?;
-        parse_playerids(&input)
-    }
-
-    pub async fn fetch_showlog(&mut self, minutes: u64) -> Result<Vec<LogLine>, RconError> {
-        let cmd = format!("ShowLog {}", minutes);
-        let input = self.execute(true, cmd).await?;
-        parse_loglines(&input)
-    }
-
-    pub async fn fetch_gamestate(&mut self) -> Result<GameState, RconError> {
-        let cmd = format!("Get GameState");
-        let input = self.execute(false, cmd).await?;
-        GameState::parse(&input)
-    }
-
-    /// Continue receiving and discarding any input for the given duration.
-    pub async fn clean(&mut self, duration: Duration) -> Result<(), RconError> {
-        timeout(duration, self.endless_read())
-            .await
-            .map_or(Ok(()), |a| a)
-    }
-
-    async fn endless_read(&mut self) -> Result<(), RconError> {
-        let mut empty = [0u8; BUFFER_LENGTH];
-        loop {
-            _ = self.tcp.read(&mut empty).await?;
-        }
+        Ok(this)
     }
 
     /// Send the command to the server and return the response from the server.
-    pub async fn execute(
-        &mut self,
-        long_response: bool,
-        command: String,
-    ) -> Result<String, RconError> {
-        // Very, very hacky solution to prevent loggin the password
-        if !command.starts_with("Login") {
-            trace!("Executing '{}' on #{}", command, self.id);
+    pub async fn execute(&mut self, mut request: RconRequest) -> Result<RconResponse, RconError> {
+        // Very, very hacky solution to prevent logging the password
+        if request.name != "LOGIN" {
+            trace!("Executing '{}' on #{}", request.name, self.id);
         }
 
-        let bytes = Bytes::from(command);
-        self.write(&bytes).await?;
-
-        if !long_response {
-            let buffer = self.read_once().await?;
-            return bytes_to_string(&buffer);
+        if let Some(auth_token) = &self.auth_token {
+            request.auth_token = auth_token.clone();
         }
 
-        // Give the server more time to respond with longer messages
-        let mut buffer = BytesMut::new();
-        loop {
-            if self.read_with_timeout(&mut buffer).await? {
-                break;
-            }
-        }
-        bytes_to_string(&buffer.freeze())
+        self.write(request.serialize()).await?;
+        let response = self.read().await?;
+        Ok(response)
     }
 
-    /// Read from the tcp connection until a timeout. Returns true if the operation has timed out, false if not.
-    async fn read_with_timeout(&mut self, buffer: &mut BytesMut) -> Result<bool, RconError> {
-        match timeout(Duration::from_secs(1), self.read(buffer)).await {
-            Ok(res) => {
-                res?;
-                Ok(false)
-            }
-            Err(_) => Ok(true),
-        }
+    pub async fn fetch_players(&mut self) -> Vec<PlayerData> {
+        let response = self
+            .execute(RconRequest::with_body(
+                "ServerInformation",
+                json!({
+                    "Name": "players",
+                    "Value": ""
+                }),
+            ))
+            .await
+            .unwrap();
+
+        let parsed: Value = serde_json::from_str(&response.content_body.as_str().unwrap()).unwrap();
+        let players = parsed.get("players").unwrap();
+        let vec = serde_json::from_value(players.clone()).unwrap();
+
+        vec
     }
 
     /// Takes a buffer, applies the xor to it and writes it to the stream.
-    async fn write(&mut self, buffer: &Bytes) -> Result<(), RconError> {
-        let mut buffer = BytesMut::from(&buffer[..]);
+    async fn write(&mut self, mut buffer: Vec<u8>) -> Result<(), RconError> {
         self.apply_xor(&mut buffer);
-        self.tcp.write(&buffer[..]).await?;
+        self.tcp.write(&buffer).await?;
 
         Ok(())
     }
 
-    /// Mutate the given buffer to apply the buffer.
-    fn apply_xor(&self, buffer: &mut BytesMut) {
-        for i in 0..buffer.len() {
-            buffer[i] = buffer[i] ^ self.xor_key[i % self.xor_key.len()];
+    /// Read the next response from the server.
+    async fn read(&mut self) -> Result<RconResponse, RconError> {
+        let _header_id = read_exact_u32(&mut self.tcp).await?;
+        let header_length = read_exact_u32(&mut self.tcp).await?;
+
+        let mut content = vec![0; header_length as usize];
+        self.read_with_timeout(&mut content).await?;
+
+        self.apply_xor(&mut content);
+
+        let string = String::from_utf8_lossy(&content)
+            .replace("\r", "")
+            .replace("\n", "")
+            .replace("\t", "");
+
+        let response = serde_json::from_str(&string).unwrap();
+
+        Ok(response)
+    }
+
+    /// Read from the tcp connection until a timeout. Returns true if the operation has timed out, false if not.
+    async fn read_with_timeout(&mut self, buffer: &mut [u8]) -> Result<(), RconError> {
+        match timeout(Duration::from_secs(3), self.tcp.read_exact(buffer)).await {
+            Ok(res) => {
+                res?;
+                Ok(())
+            }
+            Err(_) => Err(RconError::TimeOut),
         }
     }
 
-    /// Read once from the server.
-    async fn read_once(&mut self) -> Result<Bytes, RconError> {
-        let mut buffer = BytesMut::zeroed(BUFFER_LENGTH);
-        let length = self.tcp.read(&mut buffer).await?;
-        buffer.truncate(length);
-        self.apply_xor(&mut buffer);
-        Ok(buffer.freeze())
+    /// Mutate the given buffer to apply the buffer.
+    fn apply_xor(&self, buffer: &mut [u8]) {
+        let Some(xor_key) = &self.xor_key else {
+            return;
+        };
+
+        for i in 0..buffer.len() {
+            buffer[i] = buffer[i] ^ xor_key[i % xor_key.len()];
+        }
     }
 
-    /// Read the next response from the server into the given buffer at the given offset and return the new offset.
-    async fn read(&mut self, buffer: &mut BytesMut) -> Result<(), RconError> {
-        let local_buffer = self.read_once().await?;
-        buffer.extend_from_slice(&local_buffer);
-        Ok(())
+    /// The id of this connection.
+    pub fn id(&self) -> u64 {
+        self.id
     }
 }
 
-fn bytes_to_string(bytes: &Bytes) -> Result<String, RconError> {
-    let string = std::str::from_utf8(&bytes).map_err(|_| RconError::InvalidData)?;
-    Ok(string.to_string())
+async fn read_exact_u32<R: AsyncReadExt + Unpin>(reader: &mut R) -> io::Result<u32> {
+    let mut buf = [0u8; 4];
+    reader.read_exact(&mut buf).await?;
+    Ok(u32::from_le_bytes(buf))
 }

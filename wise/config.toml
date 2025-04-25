@@ -23,7 +23,7 @@ cooldown_ms = 1000
 
 [auth]
 # Should you define no tokens you must define an empty list.
-#tokens = []
+tokens = []
 
 # Add tokens here to be able to access the websocket connection.
 #[[auth.tokens]]
@@ -43,5 +43,5 @@ address = "localhost:25052"
 tls = false 
 # Path to the certificate, only needs to be set if tls is enabled 
 #cert_file = "" 
-# Path to the key file, only needs ot be set if tls is enabled
+# Path to the key file, only needs to be set if tls is enabled
 #key_file = "" 

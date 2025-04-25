@@ -10,8 +10,8 @@ use std::{error::Error, time::Duration};
 use clap::Parser;
 use config::{setup_config, AppConfig, CliConfig};
 
-use exporting::{queue::EventSender, setup_exporting};
-use services::*;
+use exporting::setup_exporting;
+use services::{polling_manager::start_polling, *};
 use tokio::{
     io::{stdin, AsyncBufReadExt, BufReader},
     time::sleep,
@@ -19,7 +19,7 @@ use tokio::{
 use tracing::{error, info, level_filters::LevelFilter};
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, Layer};
 
-use rcon::connection::{RconConnection, RconCredentials};
+use rcon::{connection::RconConnection, credentials::RconCredentials};
 use utils::get_levelfilter;
 
 #[tokio::main]
@@ -35,14 +35,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     test_connectivity(&config.borrow().rcon).await?;
     info!("Connection to server successfully tested");
 
-    let tx = EventSender::new();
-    let mut manager = PollingManager::new(config.clone(), tx.clone());
+    let di = DiContainer::create(config);
 
-    setup_exporting(&config, &tx, manager.pool()).await?;
-    manager.resume_polling().await?;
+    setup_exporting(&di).await?;
+    start_polling(&di);
 
     loop {
-        sleep(Duration::from_secs(1000)).await;
+        sleep(Duration::from_secs(36000)).await;
     }
 }
 
@@ -54,9 +53,7 @@ fn load_config() -> Result<AppConfig, Box<dyn Error>> {
     let (filtered_layer, reload_handle) = reload::Layer::new(filtered_layer);
     tracing_subscriber::registry().with(filtered_layer).init();
 
-    info!(
-        "Logging & CLI config initialized... Loading file config"
-    );
+    info!("Logging & CLI config initialized... Loading file config");
 
     let rx = setup_config(cli_config.config_file)?;
     let mut rx_clone = rx.clone();
@@ -102,7 +99,9 @@ async fn run_direct_cli(config: &AppConfig) -> Result<(), Box<dyn Error>> {
             continue;
         }
 
-        let response = connection.execute(true, command.unwrap()).await?;
-        println!("{}", response);
+        /*
+               let response = connection.execute(true, command.unwrap()).await?;
+               println!("{}", response);
+        */
     }
 }

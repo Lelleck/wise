@@ -6,8 +6,8 @@ use tokio::io;
 
 #[derive(PartialEq, Error, Debug)]
 pub enum RconError {
-    #[error("The data received is invalid and could not be converted to UTF-8.")]
-    InvalidData,
+    #[error("The data received is invalid. << {0}")]
+    InvalidData(&'static str),
 
     #[error("Error occurred while parsing with nom.")]
     ParsingError(nom::Err<nom::error::Error<String>>),
@@ -17,6 +17,9 @@ pub enum RconError {
 
     #[error("The server rejected the authentication attempt.")]
     InvalidPassword,
+
+    #[error("A communication with the server has timed out.")]
+    TimeOut,
 }
 
 impl From<io::Error> for RconError {
