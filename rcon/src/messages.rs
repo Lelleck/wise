@@ -48,13 +48,13 @@ impl RconRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RconResponse {
     #[serde(rename = "statusCode")]
-    pub status_code: u32,
+    pub status_code: i32,
 
     #[serde(rename = "statusMessage")]
     pub status_message: String,
 
     #[serde(rename = "version")]
-    pub version: u32,
+    pub version: i32,
 
     #[serde(rename = "name")]
     pub name: String,

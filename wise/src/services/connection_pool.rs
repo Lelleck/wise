@@ -31,14 +31,12 @@ pub enum PoolError {
 impl From<RconError> for PoolError {
     fn from(value: RconError) -> Self {
         match &value {
-            RconError::InvalidData(_) => Self::Recoverable(value),
-            RconError::TimeOut => Self::Recoverable(value),
-            RconError::ParsingError(_) => Self::Recoverable(value),
             RconError::IoError(e) => match e {
                 ErrorKind::ConnectionReset => Self::Recoverable(value),
                 _ => Self::Unrecoverable(value),
             },
             RconError::InvalidPassword => Self::Unrecoverable(value),
+            _ => Self::Recoverable(value),
         }
     }
 }

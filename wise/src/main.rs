@@ -19,7 +19,7 @@ use tokio::{
 use tracing::{error, info, level_filters::LevelFilter};
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, Layer};
 
-use rcon::{connection::RconConnection, credentials::RconCredentials};
+use rcon::{connection::RconConnection, credentials::RconCredentials, messages::RconRequest};
 use utils::get_levelfilter;
 
 #[tokio::main]
@@ -94,14 +94,16 @@ async fn run_direct_cli(config: &AppConfig) -> Result<(), Box<dyn Error>> {
     info!("Running direct CLI to Hell Let Loose server");
 
     loop {
-        let command = lines.next_line().await?;
-        if command.is_none() {
+        let Some(command) = lines.next_line().await? else {
             continue;
-        }
+        };
 
-        /*
-               let response = connection.execute(true, command.unwrap()).await?;
-               println!("{}", response);
-        */
+        let Some((name, body)) = command.split_once(" ") else {
+            continue;
+        };
+        let response = connection.execute(RconRequest::new(name, body)).await?;
+        dbg!(&response);
+
+        print!("{}", response.content_body.as_str().unwrap());
     }
 }

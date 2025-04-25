@@ -11,8 +11,14 @@ use tokio::{
 use tracing::{debug, instrument, trace};
 
 use crate::{
-    constants::next_id, credentials::RconCredentials, messages::RconRequest,
-    parsing::playerinfo::PlayerData, *,
+    constants::next_id,
+    credentials::RconCredentials,
+    messages::RconRequest,
+    parsing::{
+        playerinfo::PlayerData,
+        showlog::{take_logline, LogLine},
+    },
+    *,
 };
 
 use super::messages::RconResponse;
@@ -103,7 +109,8 @@ impl RconConnection {
         Ok(response)
     }
 
-    pub async fn fetch_players(&mut self) -> Vec<PlayerData> {
+    /// Get all the players on the server and their information.
+    pub async fn fetch_players(&mut self) -> Result<Vec<PlayerData>, RconError> {
         let response = self
             .execute(RconRequest::with_body(
                 "ServerInformation",
@@ -112,14 +119,55 @@ impl RconConnection {
                     "Value": ""
                 }),
             ))
-            .await
-            .unwrap();
+            .await?;
+
+        let value: Value = serde_json::from_str(
+            &response
+                .content_body
+                .as_str()
+                .ok_or(RconError::InvalidJson)?,
+        )
+        .map_err(|_| RconError::InvalidJson)?;
+
+        serde_json::from_value(
+            value
+                .get("players")
+                .cloned()
+                .ok_or(RconError::InvalidJson)?,
+        )
+        .map_err(|_| RconError::InvalidJson)
+    }
+
+    /// Get the logs from the server.
+    pub async fn fetch_showlog(&mut self) -> Result<Vec<LogLine>, RconError> {
+        let response = self
+            .execute(RconRequest::with_body(
+                "AdminLog",
+                json!({
+                    "LogBackTrackTime": "60",
+                    "Filters": []
+                }),
+            ))
+            .await?;
 
         let parsed: Value = serde_json::from_str(&response.content_body.as_str().unwrap()).unwrap();
-        let players = parsed.get("players").unwrap();
-        let vec = serde_json::from_value(players.clone()).unwrap();
+        let loglines = parsed
+            .get("entries")
+            .ok_or(RconError::InvalidJson)?
+            .as_array()
+            .ok_or(RconError::InvalidJson)?
+            .iter()
+            .filter_map(|v| {
+                v.get("message")
+                    .map(|v| v.as_str())
+                    .flatten()
+                    .map(|v| take_logline(v).ok().map(|v| v.1))
+                    .flatten()
+                    .flatten()
+            })
+            .collect::<Vec<_>>();
 
-        vec
+        Ok(loglines)
     }
 
     /// Takes a buffer, applies the xor to it and writes it to the stream.

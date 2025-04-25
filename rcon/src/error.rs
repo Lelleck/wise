@@ -9,6 +9,9 @@ pub enum RconError {
     #[error("The data received is invalid. << {0}")]
     InvalidData(&'static str),
 
+    #[error("The JSOn received from the server is invalid.")]
+    InvalidJson,
+
     #[error("Error occurred while parsing with nom.")]
     ParsingError(nom::Err<nom::error::Error<String>>),
 

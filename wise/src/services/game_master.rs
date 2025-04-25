@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use rcon::parsing::playerinfo::PlayerData;
+use rcon::parsing::{playerinfo::PlayerData, showlog::LogLine};
 use tokio::sync::Mutex;
 use tracing::trace;
 use wise_api::events::{PlayerChanges, RconEvent};
@@ -27,7 +27,7 @@ pub enum IncomingState {
     GameState(()),
 
     /// New logs.
-    Logs(Vec<()>),
+    Logs(Vec<LogLine>),
 }
 
 impl GameMaster {
@@ -49,12 +49,22 @@ impl GameMaster {
                 }
             }
             IncomingState::GameState(_) => todo!(),
-            IncomingState::Logs(_) => todo!(),
+            IncomingState::Logs(logs) => {
+                for log in logs {
+                    self.update_logs(log, di).await;
+                }
+            }
         }
     }
 
     /// Get the current state.
     pub fn current_state(&self) {}
+
+    /// Update the state from a new log.
+    pub async fn update_logs(&mut self, new_log: LogLine, di: &DiContainer) {
+        // TODO: eventually extend our knowledge of the game with these logs
+        di.game_events.send_rcon(RconEvent::Log(new_log));
+    }
 
     /// Update the state of a single player.
     pub async fn update_player(&mut self, new_data: PlayerData, di: &DiContainer) {

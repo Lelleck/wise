@@ -4,15 +4,12 @@ use nom::{
     character::complete::{char, multispace0},
     combinator::recognize,
     error::{Error, ErrorKind},
-    multi::many0,
     sequence::{delimited, separated_pair, tuple},
     Err, IResult,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing::{error, trace};
-
-use crate::RconError;
 
 use super::{utils::take_u64, Player, PlayerId};
 
@@ -294,7 +291,7 @@ fn take_chat(input: &str) -> IResult<&str, LogKind> {
 }
 
 /// Parse an entire log line if possible otherwise skip until the next "\n".
-fn take_logline(input: &str) -> IResult<&str, Option<LogLine>> {
+pub fn take_logline(input: &str) -> IResult<&str, Option<LogLine>> {
     let res = take_prelude(input);
 
     // If parsing the prelude fails skip this line, such as the case with multi-line messages
@@ -311,15 +308,6 @@ fn take_logline(input: &str) -> IResult<&str, Option<LogLine>> {
 
         return Ok((input, None));
     };
-    let (input, _) = tag("\n")(input)?;
-    return Ok((input, Some(LogLine { timestamp, kind })));
-}
 
-pub fn parse_loglines(input: &str) -> Result<Vec<LogLine>, RconError> {
-    Ok(many0(take_logline)(input).map(|o| {
-        o.1.into_iter()
-            .filter(|p| p.is_some())
-            .map(|p| p.unwrap())
-            .collect()
-    })?)
+    return Ok((input, Some(LogLine { timestamp, kind })));
 }

@@ -1,25 +1,47 @@
-/*
-#[instrument(level = "debug", skip_all, fields(poller_id = ctx.id))]
-pub async fn poll_showlog(
-    mut manager: PollingManager,
-    mut ctx: PollingContext,
-) -> Result<(), Box<dyn std::error::Error>> {
+use std::time::Duration;
+
+use chrono::Utc;
+use rcon::parsing::showlog::LogLine;
+use tokio::time::sleep;
+use tracing::{error, instrument};
+
+use crate::services::{game_master::IncomingState, DiContainer};
+
+/// Repeatedly poll the admin logs.
+#[instrument(level = "debug", skip_all)]
+pub async fn poll_showlog(mut di: DiContainer) -> Result<(), Box<dyn std::error::Error>> {
     // TODO: use the rx
-    let mut waiter = PollWaiter::new(ctx.config.clone());
     let mut known_logs = vec![];
 
     loop {
-        waiter.wait().await;
-        let new_logs = ctx.pool.execute(|c| Box::pin(c.fetch_showlog(1))).await?;
+        sleep(Duration::from_secs(1)).await;
+
+        // execute method is super janky generally. Maybe it will be looked at
+        // TODO: do not exit the loop on connection failure
+        let Ok(mut conn) = di.connection_pool.get_connection().await else {
+            continue;
+        };
+
+        let new_logs = match conn.fetch_showlog().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("An error ocurred while fetching players. << {e}");
+                continue;
+            }
+        };
+
+        di.connection_pool.return_connection(conn).await;
+        let di_copy = di.clone();
 
         let untracked_logs = merge_logs(&mut known_logs, new_logs);
-        for log in untracked_logs {
-            handle_untracked_log(&log, &mut manager, &mut ctx).await;
-        }
+
+        di.game_master
+            .update_state(IncomingState::Logs(untracked_logs), &di_copy)
+            .await;
     }
 }
 
-/// Merge
+/// Merge and combine the logs to update the old and get the currently untracked logs.
 fn merge_logs(old_logs: &mut Vec<LogLine>, mut new_logs: Vec<LogLine>) -> Vec<LogLine> {
     let untracked_logs = new_logs
         .iter()
@@ -34,6 +56,7 @@ fn merge_logs(old_logs: &mut Vec<LogLine>, mut new_logs: Vec<LogLine>) -> Vec<Lo
     untracked_logs
 }
 
+/*
 async fn handle_untracked_log(
     log_line: &LogLine,
     manager: &mut PollingManager,
@@ -91,4 +114,4 @@ async fn handle_untracked_log(
     }
 }
 
-*/
+ */
