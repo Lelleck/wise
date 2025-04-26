@@ -1,14 +1,23 @@
 # Wise
 
-Wise is a monitoring tool for Hell Let Loose. 
-It hooks directly into the servers RCON connection and continously polls commands related to in-game events,
-emitting them in a consistent format.
+Wise a middleware layer that sits between a Hell Let Loose software and your application.  
+It exposes a WebSocket interface that streams all server events in real time - just connect and start receiving data.  
+No need to worry about unstable behaviour the Hell Let Loose - Wise handles it.
 
-It polls and extracts information from the following commands:
+### Features
+ - **🔄 Real-time Events**  
+ Get real-time events from the server including score changes, player movement, kills, etc. 
+ - **🛠 Robust and Fast**  
+ Built in Rust, Wise by nature is fast and stable handling potential server-side issues.
+ - **🔐 Secure API**  
+ Unlike the Hell Let Loose server, control access to the API to prevent unwanted access with tokens and encrypt the WebSocket connection with TLS.
+ - **🔨 Take Action**  
+ Wise accepts commands you send it and can execute them for you on the Hell Let Loose server.
 
- - `ShowLog`: Detects when new logs appears and emits them. 
- - `PlayerInfo`: Detects all changes related to a player such as their unit and role.
- - `GameState`: Detects changes in the game mainly the score between teams.
+### Planned Features
+ - **💾 Save Games** - Save entire games into a common file format to review them later.
+ - **🧠 Data Inference** - Extrapolate additional data from context such as whether a player may be in a vehicle.
+ - **📋 Transparency and Accountability** - CRCON integration to transparently record actions such as kicks and bans.
 
 ## Setup
 
