@@ -112,7 +112,7 @@ fn take_kill(input: &str) -> IResult<&str, LogKind> {
     let (input, kill_type) = alt((tag("KILL: "), tag("TEAM KILL: ")))(input)?;
     let is_teamkill = kill_type == "TEAM KILL: ";
 
-    let (input, killer_arrow_victim_with_weapon) = take_until("\n")(input)?;
+    let killer_arrow_victim_with_weapon = input;
     let Some(with_idx) = killer_arrow_victim_with_weapon.rfind(" with ") else {
         error!(
             killer_arrow_victim_with_weapon,
@@ -277,7 +277,6 @@ fn take_chat(input: &str) -> IResult<&str, LogKind> {
     let (input, _) = tag("[")(input)?;
     let (input, (team, sender)) = take_faction_and_player(input)?;
     let (input, _) = tag("]: ")(input)?;
-    let (input, content) = take_until("\n")(input)?;
 
     Ok((
         input,
@@ -285,7 +284,7 @@ fn take_chat(input: &str) -> IResult<&str, LogKind> {
             sender,
             team,
             reach: reach.to_string(),
-            content: content.to_string(),
+            content: input.to_string(),
         },
     ))
 }
@@ -296,15 +295,13 @@ pub fn take_logline(input: &str) -> IResult<&str, Option<LogLine>> {
 
     // If parsing the prelude fails skip this line, such as the case with multi-line messages
     if let Err(_) = res {
-        let (input, _) = tuple((take_until("\n"), tag("\n")))(input)?;
         return Ok((input, None));
     }
     let (input, timestamp) = res.unwrap();
 
     // If we fail to parse the log line skip it
     let Ok((input, kind)) = alt((take_connect, take_kill, take_chat, take_match))(input) else {
-        let (input, skipped) = tuple((take_until("\n"), tag("\n")))(input)?;
-        trace!("Failed to parse `{}`", skipped.0);
+        trace!("Failed to parse: {}", input);
 
         return Ok((input, None));
     };

@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use tracing::trace;
 
 use crate::{
     connection::RconConnection,

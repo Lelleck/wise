@@ -96,7 +96,7 @@ where
     let json = serde_json::to_string(&ServerWsMessage::Authenticated).unwrap();
     _ = ws_stream.send(Message::text(json)).await;
 
-    info!("WebSocket connection full ready");
+    info!("WebSocket connection fully ready");
 
     let mut event_rx = ctx.di.game_events.receiver();
     // Main loop for the WS connection
@@ -114,7 +114,6 @@ where
                     continue;
                 }
 
-                trace!("Sending event to client {:?}", event);
                 match serde_json::to_string(&event) {
                     Ok(json) => _ = ws_stream.send(Message::text(json)).await,
                     Err(e) => warn!("Failed to serialize server websocket message {}", e),

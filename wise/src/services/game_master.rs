@@ -40,8 +40,6 @@ impl GameMaster {
     /// Update the internal state of the game master. If during this process changes
     /// are detected emit these using the channels in the [`DiContainer`].
     pub async fn update_state(&mut self, incoming: IncomingState, di: &DiContainer) {
-        trace!("Updating state with {:?}", incoming);
-
         match incoming {
             IncomingState::Players(player_datas) => {
                 for player in player_datas {
