@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// A request sent to the server.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RconRequest {
     #[serde(rename = "authToken")]
     pub auth_token: String,
@@ -45,7 +45,7 @@ impl RconRequest {
 }
 
 /// A response received back from the server.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RconResponse {
     #[serde(rename = "statusCode")]
     pub status_code: i32,
@@ -60,7 +60,7 @@ pub struct RconResponse {
     pub name: String,
 
     #[serde(rename = "contentBody")]
-    pub content_body: Value,
+    pub content_body: String,
 }
 
 impl RconResponse {

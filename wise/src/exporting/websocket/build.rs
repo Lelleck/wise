@@ -6,19 +6,16 @@ use tokio_rustls::{rustls::ServerConfig, TlsAcceptor};
 use tracing::debug;
 
 use crate::{
-    config::{AppConfig, WebSocketConfig},
-    connection_pool::ConnectionPool,
-    exporting::{queue::EventSender, websocket::handling::run_websocket_server},
+    config::WebSocketConfig, exporting::websocket::handling::run_websocket_server,
+    services::DiContainer,
 };
 
 /// Build the task that listens for incoming websocket connections.
 pub async fn build_websocket_exporter(
-    tx: EventSender,
-    config: AppConfig,
-    pool: ConnectionPool,
+    di: DiContainer,
 ) -> Result<impl Future<Output = Result<(), Box<dyn Error>>>, Box<dyn Error>> {
     debug!("Initializing exporting over WebSockets");
-    let ws_config = &config.borrow().exporting.websocket;
+    let ws_config = &di.config.borrow().exporting.websocket.clone();
 
     let acceptor = if ws_config.tls {
         Some(build_tls_ws(&ws_config)?)
@@ -27,13 +24,7 @@ pub async fn build_websocket_exporter(
     };
     let listener = TcpListener::bind(&ws_config.address).await?;
 
-    Ok(run_websocket_server(
-        tx,
-        listener,
-        acceptor,
-        config.clone(),
-        pool,
-    ))
+    Ok(run_websocket_server(listener, acceptor, di))
 }
 
 /// Build the [`TlsAcceptor`] for the websocket.

@@ -22,8 +22,11 @@ impl EventSender {
         EventReceiver::new(Sender::subscribe(&self.tx))
     }
 
-    pub fn send_response(&self, id: String, value: ServerWsResponse) {
-        _ = self.tx.send(ServerWsMessage::Response { id, value });
+    /// Send a response to the client only if the id is [`Some`].
+    pub fn send_response(&self, id: Option<String>, value: ServerWsResponse) {
+        if let Some(id) = id {
+            _ = self.tx.send(ServerWsMessage::Response { id, value });
+        }
     }
 
     pub fn send_rcon(&self, event: RconEvent) {

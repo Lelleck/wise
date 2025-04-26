@@ -1,6 +1,7 @@
 use std::{error::Error, net::SocketAddr, time::Duration};
 
 use futures::{SinkExt, StreamExt};
+use rcon::{messages::RconRequest, RconError};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
@@ -11,31 +12,24 @@ use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 use tracing::{debug, error, info, info_span, instrument, trace, warn};
 
 use crate::{
-    config::AppConfig,
-    connection_pool::{ConnectionPool, PoolError},
     exporting::auth::{authenticate_token, AuthHandle},
+    services::DiContainer,
 };
 
 use wise_api::messages::*;
 
-use crate::exporting::queue::*;
-
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct WsContext {
     peer: SocketAddr,
-    config: AppConfig,
     auth: AuthHandle,
-    event_tx: EventSender,
-    pool: ConnectionPool,
+    di: DiContainer,
 }
 
 /// Runs the websocket server as a background task.
 pub async fn run_websocket_server(
-    event_tx: EventSender,
     listener: TcpListener,
     acceptor: Option<TlsAcceptor>,
-    config: AppConfig,
-    pool: ConnectionPool,
+    di: DiContainer,
 ) -> Result<(), Box<dyn Error>> {
     if acceptor.is_some() {
         info!(
@@ -52,10 +46,8 @@ pub async fn run_websocket_server(
     while let Ok((stream, peer)) = listener.accept().await {
         let ctx = WsContext {
             peer,
-            config: config.clone(),
             auth: AuthHandle::default_no_perms(),
-            event_tx: event_tx.clone(),
-            pool: pool.clone(),
+            di: di.clone(),
         };
 
         _ = tokio::spawn(accept_connection(stream, acceptor.clone(), ctx));
@@ -93,8 +85,6 @@ async fn handle_connection<T>(mut ws_stream: WebSocketStream<T>, mut ctx: WsCont
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    let mut event_rx = ctx.event_tx.receiver();
-
     let auth_handle = handle_token(&mut ws_stream, &mut ctx).await;
     if auth_handle.is_err() {
         error!("Authentication failed... Enable debug logging to see reasons");
@@ -103,11 +93,13 @@ where
 
     let span = info_span!("token_span", token = ?ctx.auth.name);
     let _enter = span.enter();
-
     let json = serde_json::to_string(&ServerWsMessage::Authenticated).unwrap();
     _ = ws_stream.send(Message::text(json)).await;
 
     info!("WebSocket connection full ready");
+
+    let mut event_rx = ctx.di.game_events.receiver();
+    // Main loop for the WS connection
     loop {
         tokio::select! {
             message = ws_stream.next() => {
@@ -154,7 +146,7 @@ where
     }
 
     let provided_token = message.to_text().expect("Failed to unwrap text message");
-    let auth = authenticate_token(provided_token, &ctx.config)?;
+    let auth = authenticate_token(provided_token, &ctx.di.config)?;
     ctx.auth = auth;
     Ok(())
 }
@@ -176,16 +168,16 @@ fn accept_client_message(message: Message, ctx: &WsContext) {
         }
     };
 
-    _ = tokio::spawn(handle_client_message(client_message, ctx.clone()));
-}
-
-async fn handle_client_message(message: ClientWsMessage, mut ctx: WsContext) {
     if !ctx.auth.perms.write_rcon {
         warn!("Client is not allowed to execute commands");
         // TODO: emit an error here on the websocket
         return;
     }
 
+    _ = tokio::spawn(handle_client_message(client_message, ctx.clone()));
+}
+
+async fn handle_client_message(message: ClientWsMessage, mut ctx: WsContext) {
     let ClientWsMessage::Request { id, value } = message;
     let ClientWsRequest::Execute(request) = value;
     let response_kind = execute_client_command(&mut ctx, request).await;
@@ -201,37 +193,54 @@ async fn handle_client_message(message: ClientWsMessage, mut ctx: WsContext) {
         },
     };
 
-    if let Some(id) = id {
-        ctx.event_tx.send_response(id, ws_response);
-    }
+    ctx.di.game_events.send_response(id, ws_response);
 }
 
+/// Execute a client command on the connection pool.
 async fn execute_client_command(
     ctx: &mut WsContext,
     kind: CommandRequestKind,
-) -> Result<CommandResponseKind, PoolError> {
-    todo!();
-    /*
-       match kind {
-           CommandRequestKind::Raw {
-               command,
-               long_response,
-           } => panic!(),
-           CommandRequestKind::GetGameState => ctx
-               .pool
-               .execute(|c| Box::pin(c.fetch_gamestate()))
-               .await
-               .map(|o| CommandResponseKind::GetGameState(o)),
-           CommandRequestKind::GetPlayerIds => ctx
-               .pool
-               .execute(|c| Box::pin(c.fetch_playerids()))
-               .await
-               .map(|o| CommandResponseKind::GetPlayerIds(o)),
-           CommandRequestKind::GetPlayerInfo(player) => ctx
-               .pool
-               .execute(|c| Box::pin(c.fetch_playerinfo(player.clone())))
-               .await
-               .map(|o| CommandResponseKind::GetPlayerInfo(o)),
-       }
-    */
+) -> Result<CommandResponseKind, RconError> {
+    let mut conn = ctx.di.connection_pool.get_connection().await.unwrap();
+
+    let response = match kind {
+        CommandRequestKind::Raw { name, content_body } => conn
+            .execute(RconRequest::new(name, content_body))
+            .await
+            .map(|v| CommandResponseKind::Raw(v)),
+        CommandRequestKind::GetGameState => conn
+            .fetch_gamestate()
+            .await
+            .map(|o| CommandResponseKind::GetGameState(o)),
+        CommandRequestKind::GetPlayers => conn
+            .fetch_players()
+            .await
+            .map(|o| CommandResponseKind::GetPlayers(o)),
+        CommandRequestKind::GetPlayer(id) => conn
+            .fetch_player(id)
+            .await
+            .map(|o| CommandResponseKind::GetPlayer(Some(o))),
+        CommandRequestKind::Broadcast(message) => conn
+            .broadcast_message(&message)
+            .await
+            .map(|_| CommandResponseKind::Success),
+        CommandRequestKind::MessagePlayer(id, message) => conn
+            .individual_message(&id, &message)
+            .await
+            .map(|_| CommandResponseKind::Success),
+        CommandRequestKind::PunishPlayer(id, reason) => conn
+            .punish_player(&id, &reason)
+            .await
+            .map(|_| CommandResponseKind::Success),
+        CommandRequestKind::KickPlayer(id, reason) => conn
+            .kick_player(&id, &reason)
+            .await
+            .map(|_| CommandResponseKind::Success),
+        CommandRequestKind::TemporaryBan() => todo!(),
+        CommandRequestKind::RemoveTemporaryBan() => todo!(),
+    };
+
+    ctx.di.connection_pool.return_connection(conn).await;
+
+    response
 }

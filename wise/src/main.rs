@@ -104,6 +104,6 @@ async fn run_direct_cli(config: &AppConfig) -> Result<(), Box<dyn Error>> {
         let response = connection.execute(RconRequest::new(name, body)).await?;
         dbg!(&response);
 
-        print!("{}", response.content_body.as_str().unwrap());
+        print!("{}", response.content_body);
     }
 }

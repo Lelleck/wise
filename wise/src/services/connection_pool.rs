@@ -18,7 +18,6 @@ pub struct ConnectionPool {
 // TODO: remove the pool error enum its useless
 #[derive(Debug, Error)]
 pub enum PoolError {
-    ///
     #[error("A recoverable error occured {0:?}")]
     Recoverable(RconError),
 

@@ -1051,7 +1051,7 @@ dependencies = [
 
 [[package]]
 name = "rcon"
-version = "0.3.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -1953,7 +1953,7 @@ dependencies = [
 
 [[package]]
 name = "wise"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "chrono",
  "clap",
@@ -1980,7 +1980,7 @@ dependencies = [
 
 [[package]]
 name = "wise_api"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rcon",
  "serde",

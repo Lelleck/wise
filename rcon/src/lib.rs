@@ -1,3 +1,4 @@
+pub mod commands;
 pub mod connection;
 pub mod constants;
 pub mod credentials;

@@ -1,6 +1,9 @@
 //! Messages that can be sent over the websocket connection.
 
-use rcon::parsing::{gamestate::GameState, playerinfo::PlayerData, Player};
+use rcon::{
+    messages::RconResponse,
+    parsing::{gamestate::GameState, playerinfo::PlayerData},
+};
 use serde::{Deserialize, Serialize};
 
 use super::events::RconEvent;
@@ -12,6 +15,7 @@ pub enum ServerWsMessage {
     Rcon(RconEvent),
 
     /// The servers response to a previously send client message.
+    /// Should the client not provide an id the server won't respond.
     Response { id: String, value: ServerWsResponse },
 
     /// The client has successfully logged in.
@@ -41,8 +45,7 @@ pub enum ServerWsResponse {
     /// The response from the HLL server after executing a command.
     Execute {
         /// Indicates whether the request could not be fulfilled due
-        /// to an internal error. Should the HLL server respond with
-        /// `FAIL` this is not considered a failed response.
+        /// to an internal error.
         failure: bool,
 
         /// The response from the HLL server, None if failed.
@@ -55,36 +58,71 @@ pub enum ServerWsResponse {
 pub enum CommandRequestKind {
     /// Execute a request directly on the HLL server without parsing.
     Raw {
-        /// The raw command to execute.
-        command: String,
+        /// The command to execute.
+        name: String,
 
         #[serde(default)]
-        /// Whether the server should expect a long reponse.
-        long_response: bool,
+        /// The body to send to the HLL server.
+        content_body: String,
     },
 
     /// Get all players currently on the server.
-    GetPlayerIds,
+    GetPlayers,
 
     /// Get the current game state.
     GetGameState,
 
-    /// Get the player info for a given player.
-    GetPlayerInfo(String),
+    /// Get the player data for a given player by their id.
+    GetPlayer(String),
+
+    /// Broadcast a message to all players on the server.
+    Broadcast(String),
+
+    /// Message an individual message.
+    /// Provide the player id and the message.
+    MessagePlayer(String, String),
+
+    /// Punish a player by killing them.
+    /// Provide the player id and the message.
+    PunishPlayer(String, String),
+
+    /// Kick a player from the server.
+    ///
+    /// If enabled this will be done with CRCON.
+    KickPlayer(String, String),
+
+    /// Temporarily ban a player off the server.
+    ///
+    /// If enabled this will be done with CRCON.
+    TemporaryBan(),
+
+    /// Remove a temporary ban for a player.
+    ///
+    /// If enabled this will be done with CRCON.
+    RemoveTemporaryBan(),
 }
 
 /// For each request what the server responds with.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CommandResponseKind {
     /// The raw response from the server.
-    Raw(String),
-
-    /// All players currently on the server.
-    GetPlayerIds(Vec<Player>),
+    Raw(RconResponse),
 
     /// The current game state.
     GetGameState(GameState),
 
-    /// The current player info.
-    GetPlayerInfo(Option<PlayerData>),
+    /// All players currently on the server.
+    GetPlayers(Vec<PlayerData>),
+
+    /// Get all players
+    GetPlayer(Option<PlayerData>),
+
+    /// The requested command was successfully executed.
+    ///
+    /// Used when the requested command does not return any data such as
+    /// when broadcasting a message.
+    Success,
+
+    /// An error has occurred.
+    Error(String),
 }

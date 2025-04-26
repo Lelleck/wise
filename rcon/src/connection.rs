@@ -2,7 +2,6 @@
 use std::time::Duration;
 
 use base64::{prelude::BASE64_STANDARD, Engine};
-use serde_json::{json, Value};
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -10,16 +9,7 @@ use tokio::{
 };
 use tracing::{debug, instrument, trace};
 
-use crate::{
-    constants::next_id,
-    credentials::RconCredentials,
-    messages::RconRequest,
-    parsing::{
-        playerinfo::PlayerData,
-        showlog::{take_logline, LogLine},
-    },
-    *,
-};
+use crate::{constants::next_id, credentials::RconCredentials, messages::RconRequest, *};
 
 use super::messages::RconResponse;
 
@@ -65,14 +55,7 @@ impl RconConnection {
         ))?;
 
         let xor_key = BASE64_STANDARD
-            .decode(
-                connect_response
-                    .content_body
-                    .as_str()
-                    .ok_or(RconError::InvalidData(
-                        "Server sent something other than a string as content for ServerConnect.",
-                    ))?,
-            )
+            .decode(connect_response.content_body)
             .map_err(|_| RconError::InvalidData("Failed to decode xor key."))?;
         this.xor_key = Some(xor_key);
 
@@ -82,12 +65,7 @@ impl RconConnection {
             .await?;
         login_response.assert_ok(RconError::InvalidPassword)?;
 
-        let auth_token = login_response
-            .content_body
-            .as_str()
-            .ok_or(RconError::InvalidData(
-                "Server sent something other than a string as content for Login.",
-            ))?;
+        let auth_token = login_response.content_body;
         this.auth_token = Some(auth_token.to_string());
 
         Ok(this)
@@ -95,10 +73,7 @@ impl RconConnection {
 
     /// Send the command to the server and return the response from the server.
     pub async fn execute(&mut self, mut request: RconRequest) -> Result<RconResponse, RconError> {
-        // Very, very hacky solution to prevent logging the password
-        if request.name != "LOGIN" {
-            trace!("Executing '{}' on #{}", request.name, self.id);
-        }
+        trace!("Executing '{}' on #{}", request.name, self.id);
 
         if let Some(auth_token) = &self.auth_token {
             request.auth_token = auth_token.clone();
@@ -107,67 +82,6 @@ impl RconConnection {
         self.write(request.serialize()).await?;
         let response = self.read().await?;
         Ok(response)
-    }
-
-    /// Get all the players on the server and their information.
-    pub async fn fetch_players(&mut self) -> Result<Vec<PlayerData>, RconError> {
-        let response = self
-            .execute(RconRequest::with_body(
-                "ServerInformation",
-                json!({
-                    "Name": "players",
-                    "Value": ""
-                }),
-            ))
-            .await?;
-
-        let value: Value = serde_json::from_str(
-            &response
-                .content_body
-                .as_str()
-                .ok_or(RconError::InvalidJson)?,
-        )
-        .map_err(|_| RconError::InvalidJson)?;
-
-        serde_json::from_value(
-            value
-                .get("players")
-                .cloned()
-                .ok_or(RconError::InvalidJson)?,
-        )
-        .map_err(|_| RconError::InvalidJson)
-    }
-
-    /// Get the logs from the server.
-    pub async fn fetch_showlog(&mut self) -> Result<Vec<LogLine>, RconError> {
-        let response = self
-            .execute(RconRequest::with_body(
-                "AdminLog",
-                json!({
-                    "LogBackTrackTime": "60",
-                    "Filters": []
-                }),
-            ))
-            .await?;
-
-        let parsed: Value = serde_json::from_str(&response.content_body.as_str().unwrap()).unwrap();
-        let loglines = parsed
-            .get("entries")
-            .ok_or(RconError::InvalidJson)?
-            .as_array()
-            .ok_or(RconError::InvalidJson)?
-            .iter()
-            .filter_map(|v| {
-                v.get("message")
-                    .map(|v| v.as_str())
-                    .flatten()
-                    .map(|v| take_logline(v).ok().map(|v| v.1))
-                    .flatten()
-                    .flatten()
-            })
-            .collect::<Vec<_>>();
-
-        Ok(loglines)
     }
 
     /// Takes a buffer, applies the xor to it and writes it to the stream.
